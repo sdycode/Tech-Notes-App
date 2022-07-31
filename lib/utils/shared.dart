@@ -10,4 +10,8 @@ class Shared {
   static setAdmin(bool b) {
     pref.setBool('admin', b);
   }
+
+  static bool getAdminStat() {
+    return pref.getBool('admin') ?? false;
+  }
 }

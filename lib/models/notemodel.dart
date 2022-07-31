@@ -12,6 +12,7 @@ class Note {
   late String code = '';
   late DateTime time;
   late int epoch;
+  late String author = "sdycode@gmail.com";
 
   Note(this.title, this.note);
 
@@ -22,10 +23,26 @@ class Note {
       'tags': tags,
       'subtags': subtags,
       'note': note,
-      'bullets':bullets,
+      'bullets': bullets,
       'code': code,
       'time': time,
-      'epoch': epoch
+      'epoch': epoch,
+      "author": author
+    };
+  }
+
+  Map<String, dynamic> toJsonWithStringValues() {
+    return {
+      'id': id.toString(),
+      'title': title.toString(),
+      'tags': tags.toString(),
+      'subtags': subtags.toString(),
+      'note': note.toString(),
+      'bullets': bullets.toString(),
+      'code': code.toString(),
+      'time': time.toString(),
+      'epoch': epoch.toString(),
+      "author": author.toString()
     };
   }
 
@@ -34,11 +51,12 @@ class Note {
     note.id = data['id'];
     note.epoch = 0;
     note.tags = data['tags'];
-  note.bullets = data['bullets'];
+    note.bullets = data['bullets'];
     note.subtags = data['subtags'];
     Timestamp t = data['time'];
     note.time = t.toDate();
     note.code = data['code'];
+    note.author = data['author'];
 
     return note;
   }

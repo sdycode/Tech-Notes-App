@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
-
+String commonSeparator ='__';
 class C {
-  static String rootlink =
-      'https://flutter-notes-595a2-default-rtdb.asia-southeast1.firebasedatabase.app/';
+
+
+
+        static String appsharelink =
+      'https://play.google.com/store/apps/details?id=com.sdyapps22.flutternotes';
+  static String playstorelink =
+      'https://play.google.com/store/apps/developer?id=Shubham+Yeole';
+  static String linkedinlink =
+      'https://www.linkedin.com/in/shubham-yeole-344307109/';
+  static String youtubevideolink =
+      "https://www.youtube.com/watch?v=-goel9qSKvE";
+static String gitlink ="https://github.com/sdycode/Stick-Box-Game-Flutter";
 
   static Color titleColor = Colors.pink;
   static String noTitlenoNotenoTag =

@@ -26,7 +26,7 @@ class CustomTheme with ChangeNotifier {
           closeicon: Color.fromARGB(255, 122, 18, 0),
           pasteicon: Color.fromARGB(255, 4, 137, 24),
           addpasteicon: Color.fromARGB(255, 49, 19, 131),
-          labeltext: Color.fromARGB(255, 235, 8, 152),
+          labeltext: Color.fromARGB(255, 50, 7, 7),
           textfieldborder: Color.fromARGB(255, 224, 148, 129),
           textfieldFocusborder: Color.fromARGB(255, 120, 35, 14),
           tabbutton: Color.fromARGB(255, 239, 235, 168),
@@ -42,7 +42,11 @@ class CustomTheme with ChangeNotifier {
       primaryColor: Color.fromARGB(255, 14, 18, 60),
       accentColor: Colors.white,
       backgroundColor: Colors.white,
+      cardColor: Color.fromARGB(255, 231, 226, 188),
       scaffoldBackgroundColor: Colors.white,
+       appBarTheme: AppBarTheme(
+        backgroundColor: Color.fromARGB(255, 246, 226, 169)
+      ),
       textTheme: TextTheme(
         headline1: TextStyle(color: Colors.black),
         headline2: TextStyle(color: Color.fromARGB(255, 72, 7, 7)),
@@ -67,8 +71,8 @@ class CustomTheme with ChangeNotifier {
           labeltext: Color.fromARGB(255, 252, 196, 159),
           textfieldborder: Color.fromARGB(255, 113, 68, 57),
           textfieldFocusborder: Color.fromARGB(255, 252, 187, 171),
-          tabbutton: Color.fromARGB(255, 68, 64, 4),
-          tabbuttonActive: Color.fromARGB(255, 100, 98, 29),
+          tabbutton: Color.fromARGB(255, 85, 73, 73),
+          tabbuttonActive: Color.fromARGB(255, 132, 81, 81),
           normaltext: Color.fromARGB(255, 243, 237, 234),
           fainttext: Color.fromARGB(255, 154, 151, 151),
           deleteicon: Color.fromARGB(255, 226, 77, 77),
@@ -78,9 +82,13 @@ class CustomTheme with ChangeNotifier {
         ),
       ],
       primaryColor: Color.fromARGB(255, 241, 198, 198),
-      accentColor: Colors.red,
-      backgroundColor: Colors.grey,
-      scaffoldBackgroundColor: Colors.grey,
+      accentColor: Color.fromARGB(255, 3, 3, 3),
+      backgroundColor: Color.fromARGB(255, 22, 13, 13),
+      scaffoldBackgroundColor: Color.fromARGB(255, 16, 12, 12),
+         cardColor: Color.fromARGB(255, 50, 44, 39),
+      appBarTheme: AppBarTheme(
+        backgroundColor: Color.fromARGB(255, 49, 27, 19)
+      ),
       textTheme: TextTheme(
         headline1: TextStyle(color: Colors.white),
         headline2: TextStyle(color: Color.fromARGB(255, 226, 189, 189)),

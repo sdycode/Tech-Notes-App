@@ -1,20 +1,30 @@
 // ignore_for_file: unnecessary_statements
 
+import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
-import 'dart:math';
+import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+// import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:stick_box/main.dart';
-import 'package:stick_box/notemodel.dart';
+import 'package:stick_box/models/notemodel.dart';
+import 'package:stick_box/utils/provder.dart';
+import 'package:stick_box/utils/snackbar.dart';
 import 'package:stick_box/utils/theme.dart';
 import 'package:stick_box/widgets/app_drawer.dart';
 
-import 'constants.dart';
-import 'sizes.dart';
-import 'utils/shared.dart';
+import '../constants/constants.dart';
+import '../constants/sizes.dart';
+import '../utils/shared.dart';
+import '../widgets/add_icon.dart';
 
 class CloudStoreScreen extends StatefulWidget {
   const CloudStoreScreen({Key? key}) : super(key: key);
@@ -25,10 +35,6 @@ class CloudStoreScreen extends StatefulWidget {
 
 class _CloudStoreScreenState extends State<CloudStoreScreen>
     with TickerProviderStateMixin {
-  CollectionReference<Map<String, dynamic>> noteInstance =
-      FirebaseFirestore.instance.collection('notes');
-  Stream<QuerySnapshot> notesStream =
-      FirebaseFirestore.instance.collection('notes').snapshots();
   late TabController tabController;
   // ScrollController notescrollController =
   //     ScrollController(initialScrollOffset: 0);
@@ -36,7 +42,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
       ScrollController(initialScrollOffset: 0);
   ScrollController filterScrollController =
       ScrollController(initialScrollOffset: 0);
-
+  Note _editingNote = Note('', '');
   List<String> bullets = [];
   List<String> filters = [
     'All',
@@ -49,8 +55,11 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   ];
   // DraggableScrollableController draggableScrollableController =
   //     DraggableScrollableController();
+  bool showOnlyMyNotes = false;
   bool isAdmin = false;
   bool isCodeEditing = false;
+
+  bool isNoteEditing = false;
   int editCodeIndex = -1;
   int codetabindex = -1;
   int tabIndex = 0;
@@ -62,41 +71,44 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   List<String> codetabbtnnames = [];
   List<String> codes = [];
   List<String> maintags = [
+    'Flutter',
+    'Dart',
+    'Android',
     'iOS',
     'Native',
-    'Android',
-    'Dart',
-    'Other',
-    'Flutter'
+    'Other'
   ];
-
+  // late CollectionReference<Map<String, dynamic>> noteInstance;
+  // late Stream<QuerySnapshot> notesStream;
+  CollectionReference<Map<String, dynamic>> noteInstance =
+      FirebaseFirestore.instance.collection('notes');
+  Stream<QuerySnapshot> notesStream =
+      FirebaseFirestore.instance.collection('notes').snapshots();
   List<String> mytags = [];
-  List<String> selectedFilters = [];
+  List<String> selectedFilters = ['All'];
   String data = '';
   double webMainWFactor = 0.55;
   double webSideWFactor = 0.45;
 
   double webMainW = Sizes().sw * 0.55;
   double webSideW = Sizes().sw * 0.45;
+  late Data pdata;
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
-    kIsWeb ? loadDataFromServer() : () {};
+
     isAdmin = Shared.isAdmin;
     tabController = TabController(length: 3, vsync: this);
 
-    getMainTags();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      print('build called  after  on post  ${Random().nextInt(5000)}');
-      kIsWeb ? wetState(() {}) : hetState(() {});
-      // if (mounted) {
-      //   kIsWeb ? wetState(() {}) : hetState(() {});
-      // }
+      if (mounted) {
+        kIsWeb ? webState(() {}) : androidState(() {});
+      }
     });
   }
 
   List<Note> noteslist = [];
+  List<Note> fullNoteslist = [];
   TextEditingController noteController = TextEditingController();
   TextEditingController codeTitleController = TextEditingController();
   TextEditingController codeController = TextEditingController();
@@ -104,220 +116,94 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   TextEditingController titleController = TextEditingController();
   TextEditingController subtagController = TextEditingController();
   TextEditingController searchController = TextEditingController();
-  bool showSheet = true;
+  bool showSheet = false;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   StateSetter state = (d) {};
-  StateSetter hetState = (d) {};
-  StateSetter wetState = (d) {};
+  StateSetter androidState = (d) {};
+  StateSetter webState = (d) {};
   late MyColors myColors;
   late ThemeData themeData;
   @override
   Widget build(BuildContext context) {
     // getAdminStatus();
-    //   kIsWeb ? wetState(() {}) : hetState(() {});
-
+    //   kIsWeb ? webState(() {}) : androidState(() {});
+    pdata = Provider.of<Data>(context);
     myColors = Theme.of(context).extension<MyColors>()!;
     themeData = Theme.of(context);
-    print('build called on ${Random().nextInt(5000)}');
-    return SafeArea(
-      child: Scaffold(
-        key: _scaffoldKey,
-        drawer: AppDrawer(),
-        body: kIsWeb
-            ? webCode()
-            : Stack(fit: StackFit.expand, children: [
-                NestedScrollView(
-                  floatHeaderSlivers: true,
-                  headerSliverBuilder: (c, b) => [
-                    SliverAppBar(
-                      automaticallyImplyLeading: true,
-                      backgroundColor: Colors.deepPurple,
-                      actions: [
-                        InkWell(
-                          onTap: () {},
-                          child: Padding(
-                            padding: EdgeInsets.all(h * 0.01),
-                            child: Image.asset('assets/paste1.png'),
-                          ),
-                        ),
-                        FittedBox(
-                          child: IconButton(
-                              onPressed: () {},
-                              icon: Icon(
-                                Icons.menu,
-                                color: Colors.purple.shade200,
-                              )),
-                        )
-                      ],
-                      floating: true,
-                      // pinned: true,
-                    ),
-                    SliverList(delegate: SliverChildListDelegate([])),
-                    // Text('data'),
-                    // noteslist.isNotEmpty ? notesWidgets() : Container(),
-
-                    // Container(
-                    //   height: h*0.5,
-                    //   child: FutureBuilder(
-                    //     future: getallCacheNotes(),
-                    //     builder: (context, snapshot) {
-                    //       if (snapshot.hasData &&
-                    //           snapshot.connectionState == ConnectionState.done) {
-                    //         noteslist = snapshot.data as List<Note>;
-                    //         print('snap list ${noteslist.length}');
-                    //         return Container(
-                    //           height: h * 0.5,
-                    //           child: ListView.builder(
-                    //               itemCount: noteslist.length,
-                    //               itemBuilder: (c, i) {
-                    //                 return Text(noteslist[i].note);
-                    //               }),
-                    //         );
-                    //       } else {
-                    //         return Center(
-                    //           child: CircularProgressIndicator(),
-                    //         );
-                    //       }
-                    //     },
-                    //   ),
-                    // ),
-
-                    // StreamBuilder<QuerySnapshot>(
-                    //   stream: notesStream,
-                    //   builder: (context, snapshot) {
-                    //     if (snapshot.hasData &&
-                    //         snapshot.connectionState == ConnectionState.done) {
-                    //       return Container(
-                    //         height: h * 0.5,
-                    //         width: w,
-                    //       );
-                    //     } else {
-                    //       return CircularProgressIndicator();
-                    //     }
-                    //   },
-                    // ),
-                  ],
-                  body: Column(
-                    children: [
-                      Text('data'),
-                      Container(
-                        height: h * 0.5,
-                        child: FutureBuilder(
-                          future: getallCacheNotes(),
-                          builder: (context, snapshot) {
-                            if (snapshot.hasData &&
-                                snapshot.connectionState ==
-                                    ConnectionState.done) {
-                              noteslist = snapshot.data as List<Note>;
-                              print('snap list ${noteslist.length}');
-
-                              return StatefulBuilder(builder:
-                                  (BuildContext context, StateSetter sState) {
-                                state = sState;
-                                return Container(
-                                  height: h * 0.5,
-                                  child: ListView.builder(
-                                      itemCount: noteslist.length,
-                                      itemBuilder: (c, i) {
-                                        return Text(noteslist[i].note);
-                                      }),
-                                );
-                              });
-                            } else {
-                              return Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                      // TextField(
-                      //   controller: noteController,
-                      //   decoration: InputDecoration(border: OutlineInputBorder()),
-                      // ),
-                      // Divider(),
-                      // TextField(
-                      //   controller: titleController,
-                      //   decoration: InputDecoration(border: OutlineInputBorder()),
-                      // ),
-                      // ElevatedButton(
-                      //     onPressed: () async {
-                      //       await addNote();
-                      //     },
-                      //     child: Text('add')),
-                      // ElevatedButton(
-                      //     onPressed: () {
-                      //       // setState(() {
-                      //       noteslist.clear();
-                      //       // });
-                      //     },
-                      //     child: Text('clear')),
-                      // ElevatedButton(
-                      //     onPressed: () async {
-                      //       // noteslist =
-                      //       await getallCacheNotes();
-                      //       // setState(() {});
-
-                      //       noteslist.forEach((element) {
-                      //         print(' note is $element');
-                      //       });
-                      //     },
-                      //     child: Text('get'))
-                    ],
-                  ),
-                ),
-
-                Align(
-                  alignment: Alignment.bottomRight,
-                  child: StatefulBuilder(
-                      builder: (BuildContext context, StateSetter sheetStt) {
-                    hetState = sheetStt;
-                    return Container(
-                        margin: EdgeInsets.only(
-                            bottom: max(
-                                MediaQuery.of(context).viewPadding.bottom,
-                                MediaQuery.of(context).viewInsets.bottom)),
-                        child: showSheet
-                            ? addBottomSheet(context)
-                            : floatingButton());
-                  }),
-                )
-
-                // Container(
-                //   // height: h*0.7,
-                //   // width: w*0.9,
-                //   margin: EdgeInsets.all(w * 0.05),
-                //   color: Colors.orange,
-                //   child: floatingButton(),
-                // )
-
-                // Positioned(
-                //     top: h * 0.3,
-                //     left: 0,
-                //     child: showSheet
-                //         ? addBottomSheet(context)
-                //         : SizedBox(
-                //             height: 0,
-                //           ))
-
-                // child: BottomSheet(
-                //   // expand: false,
-                //   // // onClosing: () {},
-
-                //   builder: (
-                //     context,
-                //   ) =>
-                //       showSheet
-                //           ? addBottomSheet(context)
-                //           : SizedBox(
-                //               height: 0,
-                //             ),
-                //   onClosing: () {},
-                // ),
-              ]),
-        resizeToAvoidBottomInset: false,
+    print('build called on ${math.Random().nextInt(5000)}');
+    return WillPopScope(
+      onWillPop: () async {
+        if (FirebaseAuth.instance.currentUser == null) {
+          return true;
+        } else {
+          exit(0);
+        }
+        return true;
+      },
+      child: SafeArea(
+        child: Scaffold(
+          backgroundColor: themeData.backgroundColor,
+          key: _scaffoldKey,
+          drawer: AppDrawer(),
+          body: kIsWeb ? webCode() : androidCode(),
+          resizeToAvoidBottomInset: false,
+        ),
       ),
     );
+  }
+
+  Future updateNote() async {
+    String code = '';
+    for (int i = 0; i < codes.length; i++) {
+      code += codetabbtnnames[i] + '_*_';
+      code += codes[i];
+      final s = i < codes.length - 1 ? '__' : '';
+      code += s;
+    }
+    String bulletText = '';
+    for (int i = 0; i < bullets.length; i++) {
+      bulletText += bullets[i];
+
+      final b = i < bullets.length - 1 ? '__' : '';
+      bulletText += b;
+    }
+
+    String subtagsText = '';
+    for (int i = 0; i < subtags.length; i++) {
+      subtagsText += subtags[i];
+
+      final t = i < subtags.length - 1 ? '__' : '';
+      subtagsText += t;
+    }
+    String tagText = '';
+    for (int i = 0; i < mytags.length; i++) {
+      tagText += mytags[i];
+
+      final t = i < mytags.length - 1 ? '__' : '';
+      tagText += t;
+    }
+    print('tagtext $tagText');
+    final docNote = noteInstance.doc(_editingNote.id);
+    Note note = Note(titleController.text, noteController.text);
+    note.code = code;
+    note.tags = tagText;
+    note.id = docNote.id;
+    note.bullets = bulletText;
+
+    note.subtags = subtagsText;
+    note.epoch = DateTime.now().millisecondsSinceEpoch;
+    note.time = DateTime.now();
+    if (kIsWeb) {
+      note.author = _editingNote.author;
+    } else {
+      note.author = _editingNote.author;
+    }
+    fullNoteslist.removeWhere((e) {
+      return e.id == _editingNote.id;
+    });
+    fullNoteslist.add(note);
+    final json = note.toJson();
+    await docNote.update(json);
   }
 
   Future addNote() async {
@@ -361,18 +247,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
     note.subtags = subtagsText;
     note.epoch = DateTime.now().millisecondsSinceEpoch;
     note.time = DateTime.now();
-
-    // final json = {
-    //   'id': docNote.id,
-    //   'title': 'this is 1st post note',
-    //   'tag': 'flutter',
-    //   'subtag': '',
-    //   'note': 'this is full note',
-    //   'code': 'here full code will come',
-    //   'time': DateTime.now(),
-    //   'epoch': DateTime.now().millisecondsSinceEpoch
-    // };
-    noteslist.add(note);
+    note.author = getCurrentUserEmailId();
+    fullNoteslist.add(note);
     final json = note.toJson();
     await docNote.set(json);
 
@@ -380,35 +256,39 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   }
 
   // Future<List<Note>>
+  Future<List<Note>> getallServerNotes() async {
+    try {
+      await noteInstance.get(GetOptions(source: Source.server)).then(
+        (value) {
+          fullNoteslist.clear();
+          QuerySnapshot<Map<String, dynamic>> f = value;
+          print('data ${value.docs.length}');
+          print("get firestore insta ${f.docs.first.data()}");
+          // value.docChanges.first.doc.
+          value.docs.forEach((e) {
+            print(e.data());
+            // Timestamp t = e.data()['time'];
+            // DateTime d = t.toDate();
+            Note note = Note.fromJson(e.data());
+            // note.time = d;
+            // print('doc ${d}');
+            fullNoteslist.add(note);
+          });
+        },
+      );
+    } catch (e) {
+      showSnack(context, 'Error $e');
+    }
+
+    return fullNoteslist;
+  }
 
   Future<List<Note>> getallCacheNotes() async {
-    // await noteInstance.get(GetOptions(source: Source.cache)).then(
-    //   (value) {
-    //     noteslist.clear();
-    //     QuerySnapshot<Map<String, dynamic>> f = value;
-    //     print('data  in cache ${value.docs.length}');
-    //     print("get firestore insta ${f.docs.first.data()}");
-    //     value.docs.forEach((e) {
-    //       // Timestamp t = e.data()['time'];
-    //       // DateTime d = t.toDate();
-    //       Note note = Note.fromJson(e.data());
-    //       // note.time = d;
-    //       // print('doc ${d}');
-    //       noteslist.add(note);
-    //     });
-    //     // print('get akk called in get ${notes}');
-    //     // setState(() {
-    //     //   print('notess ${noteslist.length}');
-    //     // });
-    //   },
-    // );
-    // int snaps = await noteInstance.snapshots().length;
-    // print('get akk called ${snaps} && cachelength ${noteslist.length}');
-    if (noteslist.length < 1) {
+    if (fullNoteslist.length < 1) {
       //  noteInstance
       await noteInstance.get(GetOptions(source: Source.serverAndCache)).then(
         (value) {
-          noteslist.clear();
+          fullNoteslist.clear();
           QuerySnapshot<Map<String, dynamic>> f = value;
           print('data ${value.docs.length}');
           print("get firestore insta ${f.docs.first.data()}");
@@ -416,32 +296,30 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
           value.docs.forEach((e) {
             // Timestamp t = e.data()['time'];
             // DateTime d = t.toDate();
+            print(e.data());
             Note note = Note.fromJson(e.data());
             // note.time = d;
             // print('doc ${d}');
-            noteslist.add(note);
+            fullNoteslist.add(note);
           });
-          // print('get akk called in get ${notes}');
-          // setState(() {
-          //   print('notess ${noteslist.length}');
-          // });
         },
       );
     } else {
       await noteInstance.get(GetOptions(source: Source.cache)).then(
         (value) {
-          noteslist.clear();
+          fullNoteslist.clear();
           QuerySnapshot<Map<String, dynamic>> f = value;
           print('data ${value.docs.length}');
           print("get firestore insta ${f.docs.first.data()}");
 
           value.docs.forEach((e) {
+            print(e.data());
             // Timestamp t = e.data()['time'];
             // DateTime d = t.toDate();
             Note note = Note.fromJson(e.data());
             // note.time = d;
             // print('doc ${d}');
-            noteslist.add(note);
+            fullNoteslist.add(note);
           });
           // print('get akk called in get ${notes}');
           // setState(() {
@@ -450,64 +328,44 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
         },
       );
     }
-    // QuerySnapshot<Map<String, dynamic>> f =
-    //     noteInstance.snapshots().first as QuerySnapshot<Map<String, dynamic>>;
 
-    // print("get firestore insta ${f.docs.first.data()['title']}");
-    // FirebaseFirestore.instance.enableNetwork();
-    //  noteInstance.snapshots().map((snapshot) {
-    //   print('get akk called on $snapshot');
-    //   snapshot.docs.forEach((e) {
-    //     Timestamp t = e.data()['time'];
-    //     DateTime d = t.toDate();
-    //     Note note = Note.fromJson(e.data());
-    //     note.time = d;
-    //     print('doc ${d}');
-    //     notes.add(note);
-    //   });
-    print('doc   ----------over');
-    // print('get akk called  ${notes}');
-    // return snapshot.docs.map((doc) {
-    //   return Note.fromJson(doc.data());
-    // }) as Note;
-    // });
-
-    return noteslist;
+    return fullNoteslist;
   }
 
-  notesWidgets() {
-    return Container(
-      height: h * 0.5,
-      color: Colors.red,
-      child: ListView.builder(
-          itemCount: noteslist.length,
-          itemBuilder: (c, i) {
-            return Text(
-                ' ${noteslist[i].id} \n  ${noteslist[i].epoch} \n  ${noteslist[i].title} \n ');
-          }),
-    );
+  Future getDatatoJsonAndShareJsonFile() async {
+    var dir = await getExternalStorageDirectory();
+    var path = dir!.path;
+    // var no = (DateTime.now().millisecondsSinceEpoch / 10000).toString();
+    File newjsonFile = File('$path/1000_file.json');
+    Map sampleMap = {};
+    print('ffff ${newjsonFile.path}');
+    fullNoteslist.forEach((e) {
+      sampleMap[e.id.toString()] = e.toJsonWithStringValues();
+      // sampleMap = e.toJsonWithStringValues();
+      // print('kson data ${e.toJsonWithStringValues()}');
+    });
+    print('kson data ${sampleMap}');
+    File f = await newjsonFile.writeAsString(jsonEncode(sampleMap));
+    // // File f = await newjsonFile.writeAsString('nod ddattt');
+    // print('ffff afer  ${f.path}');
+    await Share.shareFiles([f.path]);
   }
 
-  Widget addBottomSheet(BuildContext context) {
+  Widget addBottomSheetAndroid(BuildContext context) {
     return Container(
         height: h * 0.8,
         width: w,
         margin: EdgeInsets.all(w * 0.04),
-
-        // margin: EdgeInsets.only(top: h * 0.1, left: w*0.08),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.all(
             Radius.circular(w * 0.08),
-            // topLeft: Radius.circular(w * 0.08),
-            // topRight: Radius.circular(w * 0.08),
           ),
-          color: Color.fromARGB(255, 250, 240, 225),
+          color: themeData.cardColor,
         ),
         child: Stack(
           children: [
             Container(
               height: h * 0.74,
-              // color: Colors.amber,
               child: ClipRRect(
                 borderRadius: BorderRadius.all(Radius.circular(w * 0.08 * 0)),
                 child: SingleChildScrollView(
@@ -569,6 +427,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     //  height: h*0.06,
 
                     child: TextField(
+                  
                       controller: titleController,
                       keyboardType: TextInputType.multiline,
                       maxLines: 4,
@@ -595,15 +454,16 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                                       themeData.primaryColor),
                               borderRadius: BorderRadius.circular(h * 0.02)),
                           suffixIcon: IconButton(
-                              iconSize: webh * 0.035,
-                              onPressed: () {
-                                wetState(() {
-                                  titleController.clear();
-                                });
-                              },
-                              icon: FittedBox(
-                      child: closeIcon(),
-                     ),)),
+                            iconSize: webh * 0.035,
+                            onPressed: () {
+                              webState(() {
+                                titleController.clear();
+                              });
+                            },
+                            icon: FittedBox(
+                              child: closeIcon(),
+                            ),
+                          )),
                     ),
                   ),
                   InkWell(
@@ -634,6 +494,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     //  height: h*0.06,
 
                     child: TextField(
+                          style:
+                     TextStyle(color:myColors.labeltext),
                       controller: titleController,
                       keyboardType: TextInputType.multiline,
                       maxLines: 4,
@@ -655,14 +517,15 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                                   color: C.titleColor.withOpacity(0.3)),
                               borderRadius: BorderRadius.circular(h * 0.02)),
                           suffixIcon: IconButton(
-                              onPressed: () {
-                                hetState(() {
-                                  titleController.clear();
-                                });
-                              },
+                            onPressed: () {
+                              androidState(() {
+                                titleController.clear();
+                              });
+                            },
                             icon: FittedBox(
-                      child: closeIcon(),
-                     ),)),
+                              child: closeIcon(),
+                            ),
+                          )),
                     ),
                   ),
                   InkWell(
@@ -681,7 +544,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
 
   tagsRow() {
     // maintagsscrollController.addListener(() {
-    //   wetState(() {});
+    //   webState(() {});
     // });
     return kIsWeb
         ? Container(
@@ -750,6 +613,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                 //  height: h*0.06,
 
                 child: TextField(
+                    style:
+                     TextStyle(color:myColors.labeltext),
                   controller: subtagController,
                   decoration: InputDecoration(
                       labelText: 'Subtags',
@@ -767,15 +632,16 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                                   themeData.primaryColor),
                           borderRadius: BorderRadius.circular(h * 0.02)),
                       suffixIcon: IconButton(
-                          iconSize: webh * 0.035,
-                          onPressed: () {
-                            wetState(() {
-                              subtagController.text = '';
-                            });
-                          },
-                         icon: FittedBox(
-                      child: closeIcon(),
-                     ),)),
+                        iconSize: webh * 0.035,
+                        onPressed: () {
+                          webState(() {
+                            subtagController.text = '';
+                          });
+                        },
+                        icon: FittedBox(
+                          child: closeIcon(),
+                        ),
+                      )),
                 ),
               ),
               Spacer(),
@@ -790,7 +656,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
               ),
               InkWell(
                 onTap: () {
-                  wetState(() {
+                  webState(() {
                     bool spacecount = subtagController.text.characters
                         .containsAll(Characters(' '));
                     List l = subtagController.text.split(' ');
@@ -807,7 +673,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     width: webSideW * 0.08,
                     padding: EdgeInsets.all(webh * 0.002),
                     height: webh * 0.05,
-                    child: FittedBox(child: addIcon())),
+                    child: FittedBox(child: addIcon(myColors))),
               ),
             ]),
           )
@@ -822,7 +688,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     width: w - w * 0.12 - w * 0.08 - w * 0.06 - w * 0.12,
                     //  height: h*0.06,
 
-                    child: TextField(
+                    child: TextField(  style:
+                     TextStyle(color:myColors.labeltext),
                       controller: subtagController,
                       decoration: InputDecoration(
                           labelText: 'Subtags',
@@ -839,14 +706,15 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                                       themeData.primaryColor),
                               borderRadius: BorderRadius.circular(h * 0.02)),
                           suffixIcon: IconButton(
-                              onPressed: () {
-                                hetState(() {
-                                  subtagController.text = '';
-                                });
-                              },
-                             icon: FittedBox(
-                      child: closeIcon(),
-                     ),)),
+                            onPressed: () {
+                              androidState(() {
+                                subtagController.text = '';
+                              });
+                            },
+                            icon: FittedBox(
+                              child: closeIcon(),
+                            ),
+                          )),
                     ),
                   ),
                   InkWell(
@@ -861,7 +729,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                   ),
                   InkWell(
                     onTap: () {
-                      hetState(() {
+                      androidState(() {
                         bool spacecount = subtagController.text.characters
                             .containsAll(Characters(' '));
                         List l = subtagController.text.split(' ');
@@ -878,7 +746,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                         width: w * 0.10,
                         padding: EdgeInsets.all(h * 0.002),
                         height: h * 0.05,
-                        child: FittedBox(child: addIcon())),
+                        child: FittedBox(child: addIcon(myColors))),
                   ),
                 ]),
           );
@@ -945,13 +813,18 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
       margin: EdgeInsets.all(showSheet ? w * 0.03 : w * 0.07),
       child: InkWell(
         onTap: () {
-          hetState(() {
+          androidState(() {
             showSheet = !showSheet;
           });
         },
         child: CircleAvatar(
-          backgroundColor: Theme.of(context).primaryColor,
-          child: Icon(Icons.add_card, color: myColors.iconcolors,),
+          backgroundColor: _isDarkTheme()
+              ? Color.fromARGB(255, 220, 98, 77)
+              : Color.fromARGB(255, 19, 10, 58),
+          child: Icon(
+            Icons.add_card,
+            color: Colors.white,
+          ),
         ),
       ),
     );
@@ -970,8 +843,17 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                 children: [
                   InkWell(
                     onTap: () {
-                      hetState(() {
-                        showSheet = false;
+                      webState(() {
+                        noteController.clear();
+                        codeTitleController.clear();
+                        codeController.clear();
+                        bulletController.clear();
+                        titleController.clear();
+                        subtagController.clear();
+                        subtags.clear();
+                        bullets.clear();
+                        codes.clear();
+                        isNoteEditing = false;
                       });
                     },
                     child: Container(
@@ -993,45 +875,50 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                         child: FittedBox(
                           child: Text(
                             '  Discard  ',
-                            style: TextStyle(color: myColors.fainttext),
+                            style: TextStyle(color: themeData.cardColor),
                           ),
                         ),
                       ),
                     ),
                   ),
                   InkWell(
-                    onTap: () {
-                      wetState(() {
-                        if (checkTextisValid(titleController.text) &&
-                            checkTextisValid(noteController.text) &&
-                            mytags.isNotEmpty) {
-                          addNote();
-                          showSheet = false;
+                    onTap: () async {
+                      if (checkTextisValid(titleController.text) &&
+                          checkTextisValid(noteController.text) &&
+                          mytags.isNotEmpty) {
+                        if (isNoteEditing) {
+                          await updateNote();
                         } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              C.getSnackBar(C.noTitlenoNotenoTag));
-
-                          // if (mytags.isEmpty &&
-                          //     !checkTextisValid(titleController.text) &&
-                          //     !checkTextisValid(noteController.text)) {
-                          //   ScaffoldMessenger.of(context)
-                          //       .showSnackBar(C.getSnackBar(C.noTag));
-                          // } else if (mytags.isEmpty &&
-                          //     checkTextisValid(titleController.text) &&
-                          //     !checkTextisValid(noteController.text)) {
-                          //   ScaffoldMessenger.of(context)
-                          //       .showSnackBar(C.getSnackBar(C.noTitlenoTag));
-                          // } else if (mytags.isEmpty &&
-                          //     !checkTextisValid(titleController.text) &&
-                          //     checkTextisValid(noteController.text)) {
-                          //   ScaffoldMessenger.of(context)
-                          //       .showSnackBar(C.getSnackBar(C.noNotenoTag));
-                          // } else {
-                          //   ScaffoldMessenger.of(context).showSnackBar(
-                          //       C.getSnackBar(C.noTitlenoNotenoTag));
-                          // }
+                          await addNote();
                         }
-                      });
+
+                        showSheet = false;
+                        updateState();
+                        // setState(() {});
+                      } else {
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(C.getSnackBar(C.noTitlenoNotenoTag));
+
+                        // if (mytags.isEmpty &&
+                        //     !checkTextisValid(titleController.text) &&
+                        //     !checkTextisValid(noteController.text)) {
+                        //   ScaffoldMessenger.of(context)
+                        //       .showSnackBar(C.getSnackBar(C.noTag));
+                        // } else if (mytags.isEmpty &&
+                        //     checkTextisValid(titleController.text) &&
+                        //     !checkTextisValid(noteController.text)) {
+                        //   ScaffoldMessenger.of(context)
+                        //       .showSnackBar(C.getSnackBar(C.noTitlenoTag));
+                        // } else if (mytags.isEmpty &&
+                        //     !checkTextisValid(titleController.text) &&
+                        //     checkTextisValid(noteController.text)) {
+                        //   ScaffoldMessenger.of(context)
+                        //       .showSnackBar(C.getSnackBar(C.noNotenoTag));
+                        // } else {
+                        //   ScaffoldMessenger.of(context).showSnackBar(
+                        //       C.getSnackBar(C.noTitlenoNotenoTag));
+                        // }
+                      }
                     },
                     child: Container(
                       height: h * 0.04,
@@ -1042,7 +929,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                                 blurRadius: 0.7,
                                 spreadRadius: 0.6,
                                 offset: Offset(0.5, 0.5),
-                                color:Color.fromARGB(255, 19, 187, 24))
+                                color: Color.fromARGB(255, 19, 187, 24))
                           ],
                           borderRadius: BorderRadius.circular(h * 0.05),
                           color: myColors.pasteicon ?? themeData.primaryColor),
@@ -1050,7 +937,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                         padding: EdgeInsets.all(h * 0.005),
                         child: FittedBox(
                           child: Text(
-                            '  Save  ',
+                            isNoteEditing ? ' Update ' : '  Save  ',
                             style: TextStyle(color: myColors.normaltext),
                           ),
                         ),
@@ -1069,12 +956,51 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
               children: [
                 InkWell(
                   onTap: () {
-                    hetState(() {
-                      showSheet = false;
+                    androidState(() {
+                      noteController.clear();
+                      codeTitleController.clear();
+                      codeController.clear();
+                      bulletController.clear();
+                      titleController.clear();
+                      subtagController.clear();
+                      subtags.clear();
+                      bullets.clear();
+                      codes.clear();
                     });
                   },
                   child: Container(
-                    height: h * 0.04,
+                    height: h * 0.03,
+                    margin: EdgeInsets.only(left: w * 0.04),
+                    decoration: BoxDecoration(
+                        boxShadow: [
+                          BoxShadow(
+                              blurRadius: 0.7,
+                              spreadRadius: 0.6,
+                              offset: Offset(0.5, 0.5),
+                              color: Colors.lightBlue)
+                        ],
+                        borderRadius: BorderRadius.circular(h * 0.05),
+                        color: Color.fromARGB(255, 7, 15, 54)),
+                    child: Padding(
+                      padding: EdgeInsets.all(h * 0.005),
+                      child: FittedBox(
+                        child: Text(
+                          '  Clear  ',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                InkWell(
+                  onTap: () {
+                    androidState(() {
+                      showSheet = false;
+                      isNoteEditing = false;
+                    });
+                  },
+                  child: Container(
+                    height: h * 0.03,
                     margin: EdgeInsets.only(left: w * 0.04),
                     decoration: BoxDecoration(
                         boxShadow: [
@@ -1100,13 +1026,25 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                 ),
                 InkWell(
                   onTap: () {
-                    setState(() {
-                      addNote();
-                      showSheet = false;
-                    });
+                    if (checkTextisValid(titleController.text) &&
+                        checkTextisValid(noteController.text) &&
+                        mytags.isNotEmpty) {
+                      if (isNoteEditing) {
+                        updateNote();
+                      } else {
+                        addNote();
+                      }
+
+                      setState(() {
+                        showSheet = false;
+                      });
+                    } else {
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(C.getSnackBar(C.noTitlenoNotenoTag));
+                    }
                   },
                   child: Container(
-                    height: h * 0.04,
+                    height: h * 0.03,
                     margin: EdgeInsets.only(left: w * 0.04),
                     decoration: BoxDecoration(
                         boxShadow: [
@@ -1118,13 +1056,15 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                                   myColors.pasteicon ?? themeData.primaryColor)
                         ],
                         borderRadius: BorderRadius.circular(h * 0.05),
-                        color: myColors.pasteicon ?? themeData.primaryColor),
+                        color:
+                            // Color
+                            myColors.pasteicon ?? themeData.primaryColor),
                     child: Padding(
                       padding: EdgeInsets.all(h * 0.005),
                       child: FittedBox(
                         child: Text(
-                          '  Save & Close  ',
-                          style: TextStyle(color: myColors.iconcolors),
+                          isNoteEditing ? ' Update ' : '  Save & Close  ',
+                          style: TextStyle(color: themeData.accentColor),
                         ),
                       ),
                     ),
@@ -1142,16 +1082,15 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
         ? Transform.scale(
             scale: isTagMarked ? 1.05 : 1,
             child: InkWell(
-  onTap: () {
-                        wetState(() {
-                          if (!mytags.contains(maintags[i])) {
-                            mytags.add(maintags[i]);
-                          } else {
-                            mytags.remove(maintags[i]);
-                          }
-                        });
-                      },
-
+              onTap: () {
+                webState(() {
+                  if (!mytags.contains(maintags[i])) {
+                    mytags.add(maintags[i]);
+                  } else {
+                    mytags.remove(maintags[i]);
+                  }
+                });
+              },
               child: Container(
                 margin: EdgeInsets.only(bottom: webh * 0.01),
                 child: Container(
@@ -1165,7 +1104,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                             ? []
                             : [
                                 BoxShadow(
-                                  color: myColors.fainttext ?? themeData.primaryColor,
+                                    color: myColors.fainttext ??
+                                        themeData.primaryColor,
                                     offset: Offset(0.5, 0.5),
                                     spreadRadius: 0.5,
                                     blurRadius: 2)
@@ -1179,10 +1119,12 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                         top: webh * 0.005,
                         bottom: webh * 0.005),
                     child: FittedBox(
-                      child: Text(maintags[i], 
-                      style: TextStyle(
-                        color: isTagMarked ? myColors.normaltext :myColors.normaltext
-                      ),
+                      child: Text(
+                        maintags[i],
+                        style: TextStyle(
+                            color: isTagMarked
+                                ? myColors.normaltext
+                                : myColors.normaltext),
                       ),
                     )),
               ),
@@ -1214,7 +1156,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     bottom: h * 0.005),
                 child: InkWell(
                   onTap: () {
-                    hetState(() {
+                    androidState(() {
                       if (!mytags.contains(maintags[i])) {
                         mytags.add(maintags[i]);
                       } else {
@@ -1252,10 +1194,10 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
               child: InkWell(
                 onTap: () {
                   kIsWeb
-                      ? wetState(() {
+                      ? webState(() {
                           subtags.removeAt(i);
                         })
-                      : hetState(() {
+                      : androidState(() {
                           subtags.removeAt(i);
                         });
                 },
@@ -1264,7 +1206,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                   child: FittedBox(
                       child: CircleAvatar(
                     backgroundColor: myColors.brandColor!.withGreen(180),
-                    child:   closeIcon(),
+                    child: closeIcon(),
                   )),
                 ),
               ),
@@ -1301,7 +1243,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
 
         print('maintagss $maintags');
         Future.delayed(Duration(seconds: 3)).then((value) {
-          hetState(() {});
+          androidState(() {});
         });
       },
     );
@@ -1338,7 +1280,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             Scrollbar(
               // controller: notescrollController,
               // isAlwaysShown: true,
-              child: TextField(
+              child: TextField(  style:
+                     TextStyle(color:myColors.labeltext),
                 controller: noteController,
                 keyboardType: TextInputType.multiline,
                 maxLines: subtags.isEmpty
@@ -1365,19 +1308,20 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     suffixIcon: Column(
                       children: [
                         IconButton(
-                            iconSize: kIsWeb ? webh * 0.03 : w * 0.06,
-                            onPressed: () {
-                              kIsWeb
-                                  ? wetState(() {
-                                      noteController.clear();
-                                    })
-                                  : hetState(() {
-                                      noteController.clear();
-                                    });
-                            },
-                            icon: FittedBox(
-                      child: closeIcon(),
-                     ),),
+                          iconSize: kIsWeb ? webh * 0.03 : w * 0.06,
+                          onPressed: () {
+                            kIsWeb
+                                ? webState(() {
+                                    noteController.clear();
+                                  })
+                                : androidState(() {
+                                    noteController.clear();
+                                  });
+                          },
+                          icon: FittedBox(
+                            child: closeIcon(),
+                          ),
+                        ),
 
                         //  addwithpaste
                         IconButton(
@@ -1389,8 +1333,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
 
                               noteController.text = cdata!.text!;
                               kIsWeb
-                                  ? wetState(() {})
-                                  : hetState(() {
+                                  ? webState(() {})
+                                  : androidState(() {
                                       // titleController.clear();
                                     });
                             },
@@ -1406,8 +1350,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                                 await Clipboard.getData(Clipboard.kTextPlain);
                             noteController.text += cdata!.text!;
                             kIsWeb
-                                ? wetState(() {})
-                                : hetState(() {
+                                ? webState(() {})
+                                : androidState(() {
                                     // titleController.clear();
                                   });
                           },
@@ -1443,6 +1387,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
         child: Column(
           children: [
             TextField(
+                style:
+                     TextStyle(color:myColors.labeltext),
               controller: bulletController,
               keyboardType: TextInputType.multiline,
               maxLines: 3,
@@ -1467,14 +1413,15 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                   suffixIcon: Column(
                     children: [
                       IconButton(
-                          iconSize: kIsWeb ? webh * 0.03 : w * 0.06,
-                          onPressed: () {
-                            bulletController.clear();
-                            kIsWeb ? wetState(() {}) : hetState(() {});
-                          },
+                        iconSize: kIsWeb ? webh * 0.03 : w * 0.06,
+                        onPressed: () {
+                          bulletController.clear();
+                          kIsWeb ? webState(() {}) : androidState(() {});
+                        },
                         icon: FittedBox(
-                      child: closeIcon(),
-                     ),),
+                          child: closeIcon(),
+                        ),
+                      ),
 
                       //  addwithpaste
                       IconButton(
@@ -1485,7 +1432,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                             bulletController.clear();
 
                             bulletController.text = cdata!.text!;
-                            kIsWeb ? wetState(() {}) : hetState(() {});
+                            kIsWeb ? webState(() {}) : androidState(() {});
                           },
                           icon: Icon(
                             Icons.paste,
@@ -1504,7 +1451,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                               bulletController.clear();
                             }
 
-                            kIsWeb ? wetState(() {}) : hetState(() {});
+                            kIsWeb ? webState(() {}) : androidState(() {});
                           },
                           icon: Icon(
                             Icons.add_card,
@@ -1538,66 +1485,108 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
     );
   }
 
-  Widget addIcon() {
-    return Icon(
-      Icons.add,
-      color: myColors.closeicon,
-    );
-  }
-
   Widget codeTab() {
-    return Container(
-      height: subtags.isEmpty ? h * 0.4 : h * 0.38,
+    return kIsWeb
+        ? Container(
+            height: subtags.isEmpty ? h * 0.4 : h * 0.38,
 
-      width: webSideW,
-      // color: Colors.primaries.first,
-      child: Column(
-        children: [
-          Container(
-            // color: Colors.green,
-            padding: EdgeInsets.only(left: webSideW * 0.0081),
-            child:
-                Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-              Container(
-                width: webSideW * 0.12,
-                margin: EdgeInsets.only(right: webSideW * 0.008),
-                child: FittedBox(
-                  child: codeTabBtn(-1),
+            width: webSideW,
+            // color: Colors.primaries.first,
+            child: Column(
+              children: [
+                Container(
+                  // color: Colors.green,
+                  padding: EdgeInsets.only(left: webSideW * 0.0081),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: webSideW * 0.12,
+                          margin: EdgeInsets.only(right: webSideW * 0.008),
+                          child: FittedBox(
+                            child: codeTabBtn(-1),
+                          ),
+                        ),
+                        Container(
+                          margin: EdgeInsets.all(webSideW * 0.005),
+                          width: 2,
+                          height: webh * 0.02,
+                          color: codetabbtnnames.isNotEmpty
+                              ? myColors.iconcolors
+                              : Colors.transparent,
+                        ),
+                        Container(
+                          width: webSideW * (1 - 0.24) - 3,
+                          // double.infinity,
+                          // webSideW*0.6,
+                          height: webh * 0.04,
+                          // color: Colors.orange,
+                          child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: codetabbtnnames.length,
+                              itemBuilder: (c, i) {
+                                return codeTabBtn(i);
+                              }),
+                        )
+                      ]),
                 ),
-              ),
-              Container(
-                margin: EdgeInsets.all(webSideW * 0.005),
-                width: 2,
-                height: webh * 0.02,
-                color: codetabbtnnames.isNotEmpty
-                    ? myColors.iconcolors
-                    : Colors.transparent,
-              ),
-              Container(
-                width: webSideW * (1 - 0.24) - 3,
-                // double.infinity,
-                // webSideW*0.6,
-                height: webh * 0.04,
-                // color: Colors.orange,
-                child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: codetabbtnnames.length,
-                    itemBuilder: (c, i) {
-                      return codeTabBtn(i);
-                    }),
-              )
-            ]),
-          ),
-          codeBox(codetabindex)
-        ],
-      ),
-    );
+                codeBox(codetabindex)
+              ],
+            ),
+          )
+        : Container(
+            height: subtags.isEmpty ? h * 0.4 : h * 0.38,
+
+            width: w,
+            // color: Colors.primaries.first,
+            child: Column(
+              children: [
+                Container(
+                  // color: Colors.green,
+                  padding: EdgeInsets.only(left: w * 0.0081),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: w * 0.22,
+                          margin: EdgeInsets.only(right: w * 0.008),
+                          child: FittedBox(
+                            child: codeTabBtn(-1),
+                          ),
+                        ),
+                        Container(
+                          margin: EdgeInsets.all(w * 0.005),
+                          width: 2,
+                          height: h * 0.02,
+                          color: codetabbtnnames.isNotEmpty
+                              ? myColors.iconcolors
+                              : Colors.transparent,
+                        ),
+                        Container(
+                          width: w * (1 - 0.34) - 3,
+                          // double.infinity,
+                          // w*0.6,
+                          height: h * 0.04,
+                          // color: Colors.orange,
+                          child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: codetabbtnnames.length,
+                              itemBuilder: (c, i) {
+                                return codeTabBtn(i);
+                              }),
+                        )
+                      ]),
+                ),
+                codeBox(codetabindex)
+              ],
+            ),
+          );
   }
 
   Widget tabRow() {
     print('tabController ${tabController.index}');
     tabController.addListener(() {
-      wetState(() {});
+      webState(() {});
     });
     return Container(
         height: h * 0.05,
@@ -1669,6 +1658,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                   Text(
                     'Code',
                     style: TextStyle(
+                      // fontWeight: FontWeight.w600,
                       color: tabController.index == 2
                           ? myColors.tabiconactive
                           : myColors.tabiconInctive,
@@ -1694,43 +1684,60 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
 
   webCode() {
     print(
-        'snap list  on web code ${Random().nextInt(1000)}  web code${noteslist.length}');
+        'v list  on web code ${math.Random().nextInt(1000)}  web code${noteslist.length}');
 
-    return LayoutBuilder(builder: (context, constraits) {
-      webh = constraits.maxHeight;
-      webw = constraits.maxWidth;
-      webMainW = webw * webMainWFactor;
-      webSideW = webw * webSideWFactor;
-      return StatefulBuilder(
-          builder: (BuildContext context, StateSetter wtState) {
-        wetState = wtState;
-        print('isadmin $isAdmin');
-        // codetabindex = codetabindex >= codetabbtnnames.length
-        //     ? codetabbtnnames.length - 1
-        //     : codetabindex;
+    return FutureBuilder(
+      future: getallServerNotes(),
+      builder: (BuildContext context, AsyncSnapshot<dynamic> snapshot) {
+        if (snapshot.hasData &&
+            snapshot.connectionState == ConnectionState.done) {
+          fullNoteslist = snapshot.data as List<Note>;
+          noteslist = List.from(fullNoteslist);
+          print('snap list ${noteslist.length}');
+          return LayoutBuilder(builder: (context, constraits) {
+            webh = constraits.maxHeight;
+            webw = constraits.maxWidth;
+            webMainW = webw * webMainWFactor;
+            webSideW = webw * webSideWFactor;
+            return StatefulBuilder(
+                builder: (BuildContext context, StateSetter wtState) {
+              webState = wtState;
+              print(
+                  'isadmin $isAdmin  webState  called  ${math.Random().nextInt(5000)}');
 
-        // if (isCodeEditing) {
-        //   codetabindex = editCodeIndex;
-        // }
-        return Container(
-          width: webw,
-          height: webh,
-          child: Row(
-            children: [
-              mainScreenWeb(),
-              (webw / webh) > 1.5 ? addNoteCodeWeb() : Container()
-            ],
-          ),
-        );
-      });
-    });
+              // codetabindex = codetabindex >= codetabbtnnames.length
+              //     ? codetabbtnnames.length - 1
+              //     : codetabindex;
+
+              // if (isCodeEditing) {
+              //   codetabindex = editCodeIndex;
+              // }
+              return Container(
+                width: webw,
+                height: webh,
+                child: Row(
+                  children: [
+                    mainScreenWeb(),
+                    (webw / webh) > 1.5 ? addNoteCodeWeb() : Container()
+                  ],
+                ),
+              );
+            });
+          });
+        } else {
+          return Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+      },
+    );
   }
 
   mainScreenWeb() {
     return Container(
       width: (webw / webh) > 1.5 ? webw * 0.55 : webw,
       height: webh,
-      color: myColors.addfullnoteboxbg,
+      color: myColors.addfullnoteboxbg!,
       child: Column(
         children: [searchBarWeb(), searchfiltersWeb(), notesListWidget()],
       ),
@@ -1741,7 +1748,9 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
     return Container(
       width: webw * 0.45,
       height: webh,
-      color: myColors.addfullnoteboxbg,
+      color:
+          // Colors.red,
+          myColors.addfullnoteboxbg,
       child: addNoteSheetWeb(context),
     );
   }
@@ -1759,7 +1768,9 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             // topLeft: Radius.circular(w * 0.08),
             // topRight: Radius.circular(w * 0.08),
           ),
-          color: myColors.addfullnoteboxbg,
+          color:
+              // Colors.red,
+              myColors.addfullnoteboxbg,
         ),
         child: Stack(
           fit: StackFit.loose,
@@ -1770,7 +1781,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             ),
             Container(
               height: kIsWeb ? webh * 0.84 : h * 0.74,
-              // color: Colors.amber.shade100,
+              // color: Colors.red.shade100,
               child: ClipRRect(
                 borderRadius: BorderRadius.all(Radius.circular(w * 0.08 * 0)),
                 child: SingleChildScrollView(child: columnElemets()),
@@ -1793,39 +1804,42 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
       // padding: EdgeInsets.all(webh * 0.001),
       decoration: BoxDecoration(
           color: Color.fromARGB(255, 226, 238, 152),
-          borderRadius: BorderRadius.circular(webh * 0.05)),
+          borderRadius: BorderRadius.circular(webh * 0.02)),
       child: Padding(
-          padding: EdgeInsets.all(webh * 0.005),
+          padding: EdgeInsets.all(webh * 0.001*0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisSize: MainAxisSize.max,
             children: [
-              Padding(
-                padding: EdgeInsets.only(left: webSideW * 0.03),
-                child: Text(
-                  bullets[i],
-                  style: TextStyle(fontSize: webh * 0.025, 
-                  
-                  color: myColors.normaltext
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(left: webSideW * 0.03),
+                  child: Text(
+                    bullets[i],
+                    style: TextStyle(
+                        fontSize: webh * 0.02, color: Colors.black),
                   ),
                 ),
               ),
               IconButton(
-                  iconSize: webh * 0.03,
+                  iconSize: webh * 0.022,
                   onPressed: () {
                     kIsWeb
-                        ? wetState(() {
+                        ? webState(() {
                             bullets.removeAt(i);
                           })
-                        : hetState(() {
+                        : androidState(() {
                             bullets.removeAt(i);
                           });
                   },
                   icon: Icon(
                     Icons.delete,
                     color: Colors.red,
+                     size: webh * 0.022,
                   ))
             ],
-          )),
+          )
+          ),
     );
   }
 
@@ -1857,52 +1871,111 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   }
 
   codeTabBtn(int i) {
-    return Transform.scale(
-      scale: i == codetabindex ? 1.05 : 1,
-      child: Container(
-        // margin: EdgeInsets.only(bottom: webh * 0.01),
-        child: Container(
-            // height: webh * 0.041,
-            // width: webSideW*0.08,
-            decoration: BoxDecoration(
-                color: i == codetabindex
-                    ? Colors.orange.shade200
-                    : Colors.orange.shade200,
-                borderRadius: BorderRadius.circular(webh * 0.05),
-                boxShadow: i != codetabindex
-                    ? []
-                    : [
-                        BoxShadow(
-                            offset: Offset(0.5, 0.5),
-                            spreadRadius: 0.5,
-                            blurRadius: 2)
-                      ]
-                // border: isTagMarked ? Border.all() : null
-                ),
-            margin: EdgeInsets.all(webh * 0.005),
-            padding: EdgeInsets.only(
-                left: webSideW * 0.02,
-                right: webSideW * 0.02,
-                top: webh * 0.005,
-                bottom: webh * 0.005),
-            child: InkWell(
-              onTap: () {
-                // print(' codetabindex $codetabindex  a           nd $i');
-                kIsWeb
-                    ? wetState(() {
-                        codetabindex = i;
-                        // print(' codetabindex $codetabindex and $i');
-                      })
-                    : hetState(() {
-                        codetabindex = i;
-                      });
-              },
-              child: FittedBox(
-                child: i < 0 ? Text('New Code') : Text(codetabbtnnames[i]),
-              ),
-            )),
-      ),
-    );
+    return kIsWeb
+        ? Transform.scale(
+            scale: i == codetabindex ? 1.05 : 1,
+            child: Container(
+              // margin: EdgeInsets.only(bottom: webh * 0.01),
+              child: Container(
+                  // height: webh * 0.041,
+                  // width: webSideW*0.08,
+                  decoration: BoxDecoration(
+                      color: i == codetabindex
+                          ? Colors.orange.shade200
+                          : Colors.orange.shade200,
+                      borderRadius: BorderRadius.circular(webh * 0.05),
+                      boxShadow: i != codetabindex
+                          ? []
+                          : [
+                              BoxShadow(
+                                  offset: Offset(0.5, 0.5),
+                                  spreadRadius: 0.5,
+                                  blurRadius: 2)
+                            ]
+                      // border: isTagMarked ? Border.all() : null
+                      ),
+                  margin: EdgeInsets.all(webh * 0.005),
+                  padding: EdgeInsets.only(
+                      left: webSideW * 0.02,
+                      right: webSideW * 0.02,
+                      top: webh * 0.005,
+                      bottom: webh * 0.005),
+                  child: InkWell(
+                    onTap: () {
+                      // print(' codetabindex $codetabindex  a           nd $i');
+                      kIsWeb
+                          ? webState(() {
+                              codetabindex = i;
+                              // print(' codetabindex $codetabindex and $i');
+                            })
+                          : androidState(() {
+                              codetabindex = i;
+                            });
+                    },
+                    child: FittedBox(
+                      child:
+                          i < 0 ? Text('New Code', 
+                          style: TextStyle(
+                            color:Colors.brown, fontWeight: FontWeight.w600
+                          ),
+                          ) : Text(codetabbtnnames[i],   style: TextStyle(
+                              color:Colors.brown, fontWeight: FontWeight.w600
+                          ),),
+                    ),
+                  )),
+            ),
+          )
+        : Transform.scale(
+            scale: i == codetabindex ? 1.05 : 1,
+            child: Container(
+              // margin: EdgeInsets.only(bottom: webh * 0.01),
+              child: Container(
+                  // height: webh * 0.041,
+                  // width: w*0.08,
+                  decoration: BoxDecoration(
+                      color: i == codetabindex
+                          ? Colors.orange.shade200
+                          : Colors.orange.shade200,
+                      borderRadius: BorderRadius.circular(h * 0.05),
+                      boxShadow: i != codetabindex
+                          ? []
+                          : [
+                              BoxShadow(
+                                  offset: Offset(0.5, 0.5),
+                                  spreadRadius: 0.5,
+                                  blurRadius: 2)
+                            ]
+                      // border: isTagMarked ? Border.all() : null
+                      ),
+                  margin: EdgeInsets.all(h * 0.005),
+                  padding: EdgeInsets.only(
+                      left: w * 0.02,
+                      right: w * 0.02,
+                      top: h * 0.005,
+                      bottom: h * 0.005),
+                  child: InkWell(
+                    onTap: () {
+                      // print(' codetabindex $codetabindex  a           nd $i');
+                      kIsWeb
+                          ? webState(() {
+                              codetabindex = i;
+                              // print(' codetabindex $codetabindex and $i');
+                            })
+                          : androidState(() {
+                              codetabindex = i;
+                            });
+                    },
+                    child: FittedBox(
+                      child:
+                          i < 0 ? Text('New Code',  style: TextStyle(
+                            color:Colors.brown, fontWeight: FontWeight.w600
+                          ),) : Text(codetabbtnnames[i],  style: TextStyle(
+                             color:Colors.brown, fontWeight: FontWeight.w600
+                          ),),
+                    ),
+                  )),
+            ),
+          );
   }
 
   codeBox(int cdindex) {
@@ -1911,8 +1984,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
           ? subtags.isEmpty
               ? webh * 0.54
               : webh * 0.49
-          : h * 0.3,
-      width: webSideW,
+          : h * 0.55,
+      width: kIsWeb ? webSideW : w,
       // color: Colors.purple,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1928,56 +2001,67 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     ),
                   ),
                   Spacer(),
-                  IconButton(
-                      iconSize: h * 0.03,
-                      onPressed: () {
-                        // int j = codetabindex - 1;
-                        // codes.removeAt(codetabindex);
-                        // codetabbtnnames.removeAt(codetabindex);
+                  true
+                      ? IconButton(
+                          iconSize: h * 0.03,
+                          onPressed: () {
+                            // int j = codetabindex - 1;
+                            // codes.removeAt(codetabindex);
+                            // codetabbtnnames.removeAt(codetabindex);
 
-                        kIsWeb
-                            ? wetState(() {
-                                //  codeT
-                                isCodeEditing = true;
-                                codeTitleController.text =
-                                    codetabbtnnames[cdindex];
-                                codeController.text = codes[cdindex];
-                                editCodeIndex = cdindex;
-                                codetabindex = -1;
-                              })
-                            : hetState(() {});
-                      },
-                      icon: Icon(
-                        Icons.edit,
-                        color: Colors.deepPurple,
-                      )),
-                  IconButton(
-                      iconSize: h * 0.03,
-                      onPressed: () {
-                        int j = cdindex - 1;
-                        codes.removeAt(cdindex);
-                        codetabbtnnames.removeAt(cdindex);
-
-                        kIsWeb
-                            ? wetState(() {
-                                cdindex = j;
-                                codetabindex = j;
-                                // if(cd)
-                                print('wetState  ${cdindex}');
-                              })
-                            : hetState(() {});
-                      },
-                      icon: Icon(
-                        Icons.delete,
-                        color: Colors.red,
-                      ))
+                            kIsWeb
+                                ? webState(() {
+                                    //  codeT
+                                    isCodeEditing = true;
+                                    codeTitleController.text =
+                                        codetabbtnnames[cdindex];
+                                    codeController.text = codes[cdindex];
+                                    editCodeIndex = cdindex;
+                                    codetabindex = -1;
+                                  })
+                                : androidState(() {
+                                   isCodeEditing = true;
+                                    codeTitleController.text =
+                                        codetabbtnnames[cdindex];
+                                    codeController.text = codes[cdindex];
+                                    editCodeIndex = cdindex;
+                                    codetabindex = -1;
+                                });
+                          },
+                          icon: Icon(
+                            Icons.edit,
+                            color: Colors.deepPurple,
+                          ))
+                      : Container(),
+                  true
+                      ? IconButton(
+                          iconSize: h * 0.03,
+                          onPressed: () async {
+                            // showDialog()
+                            int j = cdindex - 1;
+                            codes.removeAt(cdindex);
+                            codetabbtnnames.removeAt(cdindex);
+                            cdindex = j;
+                            codetabindex = j;
+                            webState(() {});
+                            androidState(() {});
+                          },
+                          icon: Icon(
+                            Icons.delete,
+                            color: Colors.red,
+                          ))
+                      : Container()
                 ]),
-                Divider( color: myColors.normaltext,),
+                Divider(
+                  color: myColors.normaltext,
+                ),
                 Expanded(
                   // height: h*0.3,
                   child: SingleChildScrollView(
                       child: Container(
-                          margin: EdgeInsets.all(webSideW * 0.01),
+                          margin: kIsWeb
+                              ? EdgeInsets.all(webSideW * 0.01)
+                              : EdgeInsets.all(w * 0.01),
                           child: Text(
                             codes[cdindex],
                             textAlign: TextAlign.start,
@@ -1992,8 +2076,9 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
     return Container(
         // height: kIsWeb? webh * 0.06: h * 0.05,
         // color: Colors.amber,
-        width: webSideW,
-        margin: EdgeInsets.all(webSideW * 0.01),
+        width: kIsWeb ? webSideW : w,
+        margin:
+            kIsWeb ? EdgeInsets.all(webSideW * 0.01) : EdgeInsets.all(w * 0.01),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2003,8 +2088,10 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
               //     ? webSideW - webh * 0.05 - webSideW * 0.12
               //     : w - webh * 0.05 - webSideW * 0.12,
               child: TextField(
+                  style:
+                     TextStyle(color:myColors.labeltext),
                 controller: codeTitleController,
-                keyboardType: TextInputType.multiline,
+                keyboardType: TextInputType.text,
                 maxLines: 1,
                 minLines: 1,
                 expands: false,
@@ -2024,35 +2111,22 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     suffixIcon: InkWell(
                       onTap: () {
                         kIsWeb
-                            ? wetState(() {
+                            ? webState(() {
                                 codeTitleController.clear();
                               })
-                            : hetState(() {
+                            : androidState(() {
                                 codeTitleController.clear();
                               });
                       },
                       child: FittedBox(
                         child: Padding(
-                          padding: EdgeInsets.all(webh * 0.015),
+                          padding: kIsWeb
+                              ? EdgeInsets.all(webh * 0.015)
+                              : EdgeInsets.all(h * 0.015),
                           child: Container(child: closeIcon()),
                         ),
                       ),
-                    )
-
-                    // IconButton(
-                    //    iconSize: webh * 0.035,
-                    //     onPressed: () {
-                    //    kIsWeb  ? wetState(() {
-                    //         titleController.clear();
-                    //       }):hetState(() {
-                    //         titleController.clear();
-                    //       });
-                    //     },
-                    //     icon: Icon(
-                    //       Icons.close,
-                    //       color: Colors.pink,
-                    //     ))
-                    ),
+                    )),
               ),
             ),
             isCodeEditing
@@ -2078,10 +2152,10 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                             codeTitleController.text;
                         codeController.clear();
                         codeTitleController.clear();
+                        isCodeEditing = false;
+                        webState(() {});
 
-                        wetState(() {
-                          isCodeEditing = false;
-                        });
+                        androidState(() {});
                       }
                     },
                     icon: Icon(Icons.check))
@@ -2107,10 +2181,10 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     codetabbtnnames.add(codeTitleController.text);
                     codeController.clear();
                     codeTitleController.clear();
-                    kIsWeb ? wetState(() {}) : hetState(() {});
+                    kIsWeb ? webState(() {}) : androidState(() {});
                   }
                 },
-                icon: addIcon())
+                icon: addIcon(myColors))
           ],
         ));
   }
@@ -2121,7 +2195,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             height: webh * 0.45,
             width: webSideW,
             margin: EdgeInsets.all(webSideW * 0.01),
-            child: TextField(
+            child: TextField(  style:
+                     TextStyle(color:myColors.labeltext),
               controller: codeController,
               keyboardType: TextInputType.multiline,
               maxLines: 26,
@@ -2141,24 +2216,24 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                           width: 1, color: C.titleColor.withOpacity(0.3)),
                       borderRadius: BorderRadius.circular(h * 0.02)),
                   suffixIcon: IconButton(
-                      iconSize: webh * 0.03,
-                      onPressed: () {
-                        wetState(() {
-                          codeController.clear();
-                        });
-                      },
-                     
-                     icon: FittedBox(
+                    iconSize: webh * 0.03,
+                    onPressed: () {
+                      webState(() {
+                        codeController.clear();
+                      });
+                    },
+                    icon: FittedBox(
                       child: closeIcon(),
-                     ),
-                     )),
+                    ),
+                  )),
             ),
           )
         : Container(
             height: h * 0.45,
             width: w,
             margin: EdgeInsets.all(w * 0.01),
-            child: TextField(
+            child: TextField(  style:
+                     TextStyle(color:myColors.labeltext),
               controller: codeController,
               keyboardType: TextInputType.multiline,
               maxLines: 26,
@@ -2178,15 +2253,16 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                           width: 1, color: C.titleColor.withOpacity(0.3)),
                       borderRadius: BorderRadius.circular(h * 0.02)),
                   suffixIcon: IconButton(
-                      iconSize: h * 0.03,
-                      onPressed: () {
-                        hetState(() {
-                          codeController.clear();
-                        });
-                      },
-                     icon: FittedBox(
+                    iconSize: h * 0.03,
+                    onPressed: () {
+                      androidState(() {
+                        codeController.clear();
+                      });
+                    },
+                    icon: FittedBox(
                       child: closeIcon(),
-                     ),)),
+                    ),
+                  )),
             ),
           );
   }
@@ -2203,59 +2279,68 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
       child: Row(
         children: [
           IconButton(
-              iconSize: min(tileW * 0.06, webh * 0.04),
+              iconSize: math.min(tileW * 0.06, webh * 0.04),
               padding: EdgeInsets.zero,
-              onPressed: () {
+              onPressed: () async {
                 _scaffoldKey.currentState!.openDrawer();
                 // customTheme.toggleTheme();
               },
               icon: Icon(
                 Icons.menu,
-                color: myColors.danger,
+                color: myColors.normaltext,
               )),
           Container(
             width: tileW * 0.83,
             child: TextField(
+                style: TextStyle(
+                    fontSize: webh * 0.022,
+                    //  height: 1.0,
+                    color: myColors.labeltext),
                 controller: searchController,
-                cursorColor: Colors.pink,
+                cursorColor: myColors.normaltext!,
+                onSubmitted: (d) {
+                  getSearchResult();
+                },
                 decoration: InputDecoration(
                   labelText: "Search any topic",
                   // ${noteslist.length}
-                  labelStyle: TextStyle(color: Colors.pink),
+                  labelStyle: TextStyle(color: myColors.normaltext!),
                   // join,
                   // '${webw.round()} / ${webMainW.round()}  / ${webSideW.round()}',
-                  contentPadding: EdgeInsets.all(webh * 0.005 * 0),
+                  contentPadding: EdgeInsets.only(left: webMainW * 0.015),
 
                   focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                          width: 1, color: C.titleColor.withOpacity(0.3)),
+                      borderSide:
+                          BorderSide(width: 1, color: myColors.normaltext!),
                       borderRadius: BorderRadius.circular(h * 0.02)),
                   enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                          width: 1, color: C.titleColor.withOpacity(0.3)),
+                      borderSide:
+                          BorderSide(width: 1, color: myColors.normaltext!),
                       borderRadius: BorderRadius.circular(h * 0.02)),
-                  prefixIcon: InkWell(
-                      onTap: () {},
-                      child: Icon(
-                        Icons.search,
-                        size: webh * 0.02,
-                        color: Colors.grey,
-                      )),
+                  // prefixIcon: InkWell(
+                  //     onTap: () {},
+                  //     child: Icon(
+                  //       Icons.search,
+                  //       size: webh * 0.02,
+                  //       color: Colors.grey,
+                  //     )),
 
                   suffixIcon: IconButton(
-                      padding: EdgeInsets.zero,
-                      iconSize: webh * 0.02,
-                      onPressed: () {
-                        wetState(() {
-                          searchController.clear();
-                        });
-                      },
-                      icon: FittedBox(
+                    padding: EdgeInsets.zero,
+                    iconSize: webh * 0.02,
+                    onPressed: () {
+                      webState(() {
+                        searchController.clear();
+                        getSearchResult();
+                      });
+                    },
+                    icon: FittedBox(
                       child: closeIcon(),
-                     ),),
+                    ),
+                  ),
                   // InkWell(
                   //     onTap: () {
-                  //       wetState(() {
+                  //       webState(() {
                   //         searchController.clear();
                   //       });
                   //     },
@@ -2264,22 +2349,20 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                   //       size: webh * 0.02,
                   //     )),
                 ),
-                style: TextStyle(
-                    fontSize: webh * 0.022,
-                    //  height: 1.0,
-                    color: Colors.black)),
+              ),
           ),
           IconButton(
-              iconSize: min(tileW * 0.06, webh * 0.04),
+              iconSize: math.min(tileW * 0.06, webh * 0.04),
               padding: EdgeInsets.zero,
               onPressed: () {
-                wetState(() {
-                  getAdminStatus();
-                });
+                // webState(() {
+                //   getAdminStatus();
+                // });
+                getSearchResult();
               },
-              icon: Icon(Icons.refresh, 
-              
-              color: myColors.iconcolors,
+              icon: Icon(
+                Icons.search,
+                color: myColors.iconcolors,
               )),
         ],
       ),
@@ -2303,62 +2386,285 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
         ));
   }
 
+  searchBarAndroid() {
+    String join = selectedFilters.join(' ');
+    double tileW = w * 0.72;
+    return Container(
+      width: tileW,
+      // webMainW,
+      height: h * 0.04,
+      margin: EdgeInsets.all(h * 0.01),
+      // color: Colors.pink.shade100,
+      child: Container(
+        width: tileW - h * 0.06,
+        child: TextField(
+           style: TextStyle(
+                fontSize: h * 0.022,
+                //  height: 1.0,
+                color:myColors.labeltext),
+            controller: searchController,
+            cursorColor: myColors.normaltext,
+            onChanged: (d) {
+              getSearchResult();
+            },
+            decoration: InputDecoration(
+              labelText: "Search any topic",
+              // ${noteslist.length}
+              labelStyle: TextStyle(color: myColors.normaltext),
+              // join,
+              // '${webw.round()} / ${webMainW.round()}  / ${webSideW.round()}',
+              contentPadding: EdgeInsets.only(left: w * 0.05),
+
+              focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(
+                      width: 1, color: C.titleColor.withOpacity(0.3)),
+                  borderRadius: BorderRadius.circular(h * 0.02)),
+              enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(
+                      width: 1, color: C.titleColor.withOpacity(0.3)),
+                  borderRadius: BorderRadius.circular(h * 0.02)),
+
+              suffixIcon: IconButton(
+                padding: EdgeInsets.zero,
+                iconSize: h * 0.02,
+                onPressed: () {
+                  androidState(() {
+                    searchController.clear();
+                    getSearchResult();
+                  });
+                },
+                icon: FittedBox(
+                  child: closeIcon(),
+                ),
+              ),
+              // InkWell(
+              //     onTap: () {
+              //       webState(() {
+              //         searchController.clear();
+              //       });
+              //     },
+              //     child: Icon(
+              //       Icons.close,
+              //       size: h * 0.02,
+              //     )),
+            ),
+          ),
+      ),
+    );
+  }
+
+  searchfiltersAndroid() {
+    Color _darkColor = Color.fromARGB(255, 11, 5, 57);
+    Color _lightColor = Color.fromARGB(255, 204, 220, 240);
+    print('isdark ${_isDarkTheme()}');
+    return Container(
+      height: h * 0.05,
+      width: w,
+      child: Row(
+        mainAxisSize: MainAxisSize.max,
+        children: [
+          Container(
+            padding: EdgeInsets.all(w * 0.01),
+            child: ElevatedButton(
+                style: ButtonStyle(
+                    backgroundColor: MaterialStateProperty.all<Color>(
+                        _isDarkTheme()
+                            ? (showOnlyMyNotes ? _lightColor : _darkColor)
+                            : (showOnlyMyNotes ? _darkColor : _lightColor)),
+                    foregroundColor: MaterialStateProperty.all<Color>(
+                        _isDarkTheme()
+                            ? (showOnlyMyNotes ? _darkColor : _lightColor)
+                            : (showOnlyMyNotes ? _lightColor : _darkColor)),
+                    shape: MaterialStateProperty.all<RoundedRectangleBorder>(
+                        RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18.0),
+                            side: BorderSide(
+                                color: Color.fromARGB(255, 15, 5, 96))))),
+                onPressed: () {
+                  androidState(
+                    () {
+                      showOnlyMyNotes = !showOnlyMyNotes;
+                      getSearchResult();
+                    },
+                  );
+                },
+                child: Text('My Notes')),
+          ),
+          showOnlyMyNotes
+              ? Icon(
+                  Icons.check,
+                  color: myColors.addpasteicon,
+                )
+              : Container(),
+          SizedBox(
+            width: w * 0.02,
+          ),
+          Expanded(
+            child: ListView.builder(
+
+                // controller: filterScrollController,
+                scrollDirection: Axis.horizontal,
+                itemCount: filters.length,
+                itemBuilder: (c, i) {
+                  return
+                      // Text('button $i              ');
+                      filterTab(i);
+                }),
+          )
+        ],
+      ),
+    );
+  }
+
   filterTab(int i) {
-    bool isTagMarked = selectedFilters.contains(filters[i]);
+    bool _isTagMarked = selectedFilters.contains(filters[i]);
     return Transform.scale(
-      scale: isTagMarked ? 1.05 : 1,
+      scale: _isTagMarked ? 1.05 : 1,
       child: InkWell(
         onTap: () {
-          wetState(() {
+          if (filters[i] == 'All') {
+            selectedFilters.clear();
+            selectedFilters.add(filters[i]);
+            // noteslist = List.from(fullNoteslist);
+            getSearchResult();
+            // if ( !kIsWeb) {
+            //   modifyNotesListToShowOnlyUserNotes();
+            // }
+          } else {
+            selectedFilters.remove('All');
             if (!selectedFilters.contains(filters[i])) {
               selectedFilters.add(filters[i]);
             } else {
               selectedFilters.remove(filters[i]);
             }
-          });
+            if (selectedFilters.isEmpty) {
+              noteslist = List.from(fullNoteslist);
+
+              selectedFilters.add('All');
+            }
+             getSearchResult();
+          }
+
+          webState(() {});
+          // androidState(() {});
         },
         child: Container(
-          margin: EdgeInsets.only(
-            bottom: webh * 0.03,
-            left: webMainW * 0.012,
-            top: webh * 0.008,
-          ),
+          margin: kIsWeb
+              ? EdgeInsets.only(
+                  bottom: webh * 0.03,
+                  left: webMainW * 0.012 * 1,
+                  top: webh * 0.008,
+                )
+              : EdgeInsets.only(
+                  // bottom: h * 0.03,
+                  left: w * 0.012,
+                  // top: h * 0.008,
+                ),
           child: Container(
-              height: webh * 0.06,
+              // height: kIsWeb? webh * 0.06:h* 0.03,
+              // height: double.minPositive,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
-                  color: isTagMarked
+                  color: _isTagMarked
                       ? myColors.tabbuttonActive
                       : myColors.tabbutton,
-                  borderRadius: BorderRadius.circular(webh * 0.05),
-                  boxShadow: !isTagMarked
+                  borderRadius: kIsWeb
+                      ? BorderRadius.circular(webh * 0.05)
+                      : BorderRadius.circular(h * 0.03),
+                  boxShadow: !_isTagMarked
                       ? []
                       : [
                           BoxShadow(
-                            color: myColors.normaltext!,
-                              offset: Offset(0.5, 0.5),
-                              spreadRadius: 0.5,
-                              blurRadius: 2)
+                              color: myColors.normaltext!,
+                              offset: Offset(0.3, 0.3),
+                              spreadRadius: 0.4,
+                              blurRadius: 1)
                         ]
                   // border: isTagMarked ? Border.all() : null
                   ),
-              margin: EdgeInsets.all(webh * 0.002),
-              padding: EdgeInsets.only(
-                  left: webw * 0.02,
-                  right: webw * 0.02,
-                  top: webh * 0.005,
-                  bottom: webh * 0.005),
-              child: FittedBox(
-                child: Text(filters[i], 
-                
+              margin: kIsWeb
+                  ? EdgeInsets.all(webh * 0.002)
+                  : EdgeInsets.all(h * 0.008),
+              padding: kIsWeb
+                  ? EdgeInsets.only(
+                      left: webw * 0.02,
+                      right: webw * 0.02,
+                      top: webh * 0.005,
+                      bottom: webh * 0.005)
+                  : EdgeInsets.only(
+                      left: w * 0.03,
+                      right: w * 0.03,
+                      top: h * 0.001,
+                      bottom: h * 0.001),
+              child: Text(
+                filters[i],
                 style: TextStyle(
-                  color: isTagMarked ? myColors.normaltext: myColors.normaltext
-                ),
-                ),
+                    fontSize: _isTagMarked ? h * 0.02 : h * 0.015,
+                    color: _isTagMarked
+                        ? myColors.normaltext
+                        : myColors.normaltext),
               )),
         ),
       ),
     );
   }
+
+  // filterTabAndroid(int i) {
+  //   print('filterTabAndroid');
+  //   bool isTagMarked = selectedFilters.contains(filters[i]);
+  //   return Transform.scale(
+  //     scale: isTagMarked ? 1.05 : 1,
+  //     child: InkWell(
+  //       onTap: () {
+  //         webState(() {
+  //           if (!selectedFilters.contains(filters[i])) {
+  //             selectedFilters.add(filters[i]);
+  //           } else {
+  //             selectedFilters.remove(filters[i]);
+  //           }
+  //         });
+  //       },
+  //       child: Container(
+  //         margin: EdgeInsets.only(
+  //           bottom: h * 0.03,
+  //           left: webMainW * 0.012,
+  //           top: h * 0.008,
+  //         ),
+  //         child: Container(
+  //             height: h * 0.06,
+  //             decoration: BoxDecoration(
+  //                 color: isTagMarked
+  //                     ? myColors.tabbuttonActive
+  //                     : myColors.tabbutton,
+  //                 borderRadius: BorderRadius.circular(h * 0.05),
+  //                 boxShadow: !isTagMarked
+  //                     ? []
+  //                     : [
+  //                         BoxShadow(
+  //                             color: myColors.normaltext!,
+  //                             offset: Offset(0.5, 0.5),
+  //                             spreadRadius: 0.5,
+  //                             blurRadius: 2)
+  //                       ]),
+  //             margin: EdgeInsets.all(h * 0.002),
+  //             padding: EdgeInsets.only(
+  //                 left: w * 0.02,
+  //                 right: w * 0.02,
+  //                 top: h * 0.005,
+  //                 bottom: h * 0.005),
+  //             child: FittedBox(
+  //               child: Text(
+  //                 filters[i],
+  //                 style: TextStyle(
+  //                     color: isTagMarked
+  //                         ? myColors.normaltext
+  //                         : myColors.normaltext),
+  //               ),
+  //             )),
+  //       ),
+  //     ),
+  //   );
+  // }
 
   notesListWidget() {
     print('notess ${noteslist.length}');
@@ -2373,9 +2679,13 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   noteBox(int i) {
     ScrollController controller = ScrollController();
     double tileW = (webw / webh) > 1.5 ? webMainW : webw;
+
     double indent = tileW * 0.1;
     double endIndent = tileW * 0.02;
-
+    if (!kIsWeb) {
+      indent = tileW * 0.15;
+      double endIndent = tileW * 0.04;
+    }
     String subtitlemaintags = noteslist[i].tags.replaceAll('__', ', ');
     String subtitlesubtags = noteslist[i].subtags.replaceAll('__', ', ');
     List<String> bulltesInTile = noteslist[i].bullets.split('__');
@@ -2384,23 +2694,26 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
     fullcodes.forEach((e) {
       List pair = e.split('_*_');
       print(' pair $pair');
-      // codepairs.add([pair[0], pair[1]]);
+      if (pair.length > 1) {
+        codepairs.add([pair[0], pair[1]]);
+      }
     });
 
-    return Container(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(h * 0.02),
+      child: Container(
         width: tileW,
-        // color: Colors.green,
-        margin: EdgeInsets.all(tileW * 0.005),
-        decoration: BoxDecoration(
-            color:
-            myColors.expansionboxbg,
+        margin: EdgeInsets.all(tileW * 0.01),
+        decoration: BoxDecoration(color: myColors.expansionboxbg,
             //  Color.fromARGB(255, 242, 238, 202),
             boxShadow: [BoxShadow(offset: Offset(0.5, 0.5))]),
         child: ExpansionTile(
           controlAffinity: ListTileControlAffinity.platform,
           iconColor: myColors.addpasteicon,
-          collapsedIconColor:myColors.addpasteicon ,
+          collapsedIconColor: myColors.addpasteicon,
           maintainState: true,
+          textColor: myColors.normaltext,
+          collapsedTextColor: myColors.normaltext,
           title: SingleChildScrollView(
             child: Text(
               noteslist[i].title,
@@ -2433,7 +2746,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     child: Text(
                       'subtag',
                       style: TextStyle(
-                        fontWeight: FontWeight.w200,
+                        fontWeight: FontWeight.w600,
                         // fontSize: webh * 0.045,
                         fontSize: webh * 0.015,
                         color: Colors.grey,
@@ -2448,52 +2761,38 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
 
                           subtitlesubtags))),
                   // Spacer(),
-                  isAdmin
-                      ? IconButton(
-                          padding: EdgeInsets.zero,
-                          iconSize: tileW * 0.04,
-                          onPressed: () {},
-                          icon: Icon(
-                            Icons.edit,
-                            color: Colors.deepPurple,
-                          ))
-                      : Container(),
-                  isAdmin
+                  isAdmin || showOnlyMyNotes
                       ? IconButton(
                           padding: EdgeInsets.zero,
                           iconSize: tileW * 0.04,
                           onPressed: () {
-                            wetState(() {
-                              noteInstance.doc(noteslist[i].id).delete();
-                              noteslist.removeAt(i);
-                            });
+                            _editingNote = noteslist[i];
+                            isNoteEditing = true;
+                            loadThisDataInEditingBox();
+                            if (!kIsWeb) {
+                              androidState(() {
+                                showSheet = true;
+                              });
+                            }
                           },
-                          icon: Icon(
-                            Icons.delete,
-                            color: Colors.red,
-                          ))
+                          icon: Icon(Icons.edit,
+                              color: Colors.deepPurple, size: h * 0.034))
+                      : Container(),
+                  isAdmin || showOnlyMyNotes
+                      ? IconButton(
+                          padding: EdgeInsets.zero,
+                          iconSize: tileW * 0.04,
+                          onPressed: () async {
+                            await askToDelete(i);
+
+                            webState(() {});
+                          },
+                          icon: Icon(Icons.delete,
+                              color: Colors.red, size: h * 0.034))
                       : Container()
                 ],
               ),
             ),
-            // Divider(
-            //   indent: indent,
-            //   endIndent: endIndent,
-            // ),
-            // Row(
-            //   children: [
-            //     tilesubpartheading('subtags', indent),
-            //     Text(
-            //      subtitlesubtags,
-            //       // noteslist[i].subtags,
-            //       style: TextStyle(
-            //         fontWeight: FontWeight.w200,
-            //         // fontSize: webh * 0.045,
-            //         color: Colors.black,
-            //       ),
-            //     ),
-            //   ],
-            // ),
             Divider(
               color: myColors.normaltext,
               indent: indent,
@@ -2502,16 +2801,19 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             Row(
               children: [
                 tilesubpartheading('note', indent),
-                Text(
-                  noteslist[i].note,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w200,
-                    // fontSize: webh * 0.015,
+                Expanded(
+                  child: Text(
+                    noteslist[i].note,
+                    style: TextStyle(
+                        // fontWeight: FontWeight.w500,
+                        // fontSize: webh * 0.015,
+                        color: myColors.normaltext),
                   ),
                 ),
               ],
             ),
-            Divider( color: myColors.normaltext,
+            Divider(
+              color: myColors.normaltext,
               indent: indent,
               endIndent: endIndent,
             ),
@@ -2520,16 +2822,21 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
               child: Row(
                 children: [
                   tilesubpartheading('bullets', indent),
-                  Container(
+                  Expanded(
                       child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       ...(bulltesInTile.asMap().entries.map((e) {
                         return Row(
+                          mainAxisSize: MainAxisSize.max,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.start,
                           children: [
-                            Text((e.key + 1).toString() + '. '),
-                            Text(e.value)
+                            Text(
+                              (e.key + 1).toString() + '. ',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            Expanded(child: Text(e.value))
                           ],
                         );
                       }).toList())
@@ -2538,11 +2845,11 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                 ],
               ),
             ),
-            Divider( color: myColors.normaltext,
+            Divider(
+              color: myColors.normaltext,
               indent: indent,
               endIndent: endIndent,
             ),
-
             Row(
               children: [
                 tilesubpartheading('code', indent),
@@ -2558,8 +2865,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                           shrinkWrap: true,
                           controller: controller,
                           scrollDirection: Axis.horizontal,
-                          //   // itemCount: codepairs.length+2,
-                          itemCount: 5,
+                          itemCount: codepairs.length,
+                          // itemCount: 5,
                           itemBuilder: (c, i) {
                             return Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2570,10 +2877,9 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.center,
                                     children: [
-                                      // Text( codepairs[i][0]+'fdfdsf$i'),
-                                      // Text( codepairs[i][1]+'fdfdsf$i'),
+                                      Text(codepairs[i][0]),
 
-                                      Text('fdfdsf$i'),
+                                      // Text('fdfdsf$i'),
                                       // Divider(
                                       //   indent: 10,
                                       //   thickness: 3,
@@ -2592,13 +2898,12 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                                       SizedBox(
                                         height: 3,
                                       ),
-                                      Text(
-                                          'fdfdsf$i fdffffffffffffffffffffffff'),
+                                      Text(codepairs[i][1]),
                                     ],
                                   ),
                                 ),
                                 VerticalDivider(
-                                   color: myColors.normaltext,
+                                  color: myColors.normaltext,
                                   indent: 20,
                                   endIndent: 20,
                                 )
@@ -2608,10 +2913,24 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     )),
               ],
             ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(
+                  ' -  ' + noteslist[i].author.split('@').first,
+                  style: TextStyle(
+                      color: _isDarkTheme()
+                          ? Color.fromARGB(255, 149, 232, 233)
+                          : Color.fromARGB(255, 4, 38, 159),
+                      fontWeight: FontWeight.w400),
+                ),
+              ),
+            )
           ],
-        )
-        // Text(noteslist[i].note),
-        );
+        ),
+      ),
+    );
   }
 
   bool checkTextisValid(String s) {
@@ -2633,7 +2952,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
       child: Text(
         s,
         style: TextStyle(
-          fontWeight: FontWeight.w200,
+          fontWeight: FontWeight.w600,
           fontSize: webh * 0.015,
           color: Colors.grey,
         ),
@@ -2642,106 +2961,409 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   }
 
   void getAdminStatus() {
-    isAdmin = Shared.isAdmin;
+    // isAdmin = Shared.isAdmin;
+    bool isAdmin = Shared.getAdminStat();
     print('isadmin status $isAdmin');
   }
 
-  Future loadDataFromServer() async {
-    noteslist = await getallCacheNotes();
-    setState(() {});
+  // Future loadDataFromServer() async {
+  //   fullNoteslist = await getallCacheNotes();
+  //   setState(() {});
+  // }
+
+  androidCode() {
+    return NestedScrollView(
+      floatHeaderSlivers: true,
+      headerSliverBuilder: (c, b) => [
+        SliverAppBar(
+          automaticallyImplyLeading: false,
+          backgroundColor: themeData.appBarTheme.backgroundColor,
+          actions: [
+            InkWell(
+              onTap: () async {
+                // await getDatatoJsonAndShareJsonFile();
+                _scaffoldKey.currentState!.openDrawer();
+              },
+              child: Padding(
+                padding: EdgeInsets.all(h * 0.01),
+                child: Icon(Icons.menu, color: myColors.iconcolors
+                    //  myColors.iconcolors,
+                    ),
+              ),
+            ),
+            searchBarAndroid(),
+            InkWell(
+              onTap: () {
+                getSearchResult();
+              },
+              child: Padding(
+                padding: EdgeInsets.all(h * 0.01),
+                child: Icon(Icons.search, color: myColors.iconcolors
+                    //  myColors.iconcolors,
+                    ),
+              ),
+            ),
+          ],
+          floating: true,
+          // pinned: true,
+        ),
+        SliverList(delegate: SliverChildListDelegate([])),
+      ],
+      body: FutureBuilder(
+        future: getallCacheNotes(),
+        builder: (context, snapshot) {
+          if (snapshot.hasData &&
+              snapshot.connectionState == ConnectionState.done) {
+            fullNoteslist = snapshot.data as List<Note>;
+            noteslist = List.from(fullNoteslist);
+            print('snap list ${noteslist.length}');
+
+            return StatefulBuilder(
+                builder: (BuildContext context, StateSetter sState) {
+              androidState = sState;
+              if (showOnlyMyNotes) {
+                modifyNotesListToShowOnlyUserNotes();
+              }
+              print('snap list in andoird state ${noteslist.length}');
+              return Container(
+                color: themeData.backgroundColor,
+                child: Stack(
+                  children: [
+                    Column(
+                      mainAxisSize: MainAxisSize.max,
+                      children: [
+                        // Text('dataddd'),
+
+                        if (!showSheet) searchfiltersAndroid(),
+                        if (!showSheet)
+                          Expanded(
+                            // height: h * 0.5,
+
+                            child: noteslist.isNotEmpty
+                                ? ListView.builder(
+                                    itemCount: noteslist.length,
+                                    itemBuilder: (c, i) {
+                                      return Container(
+                                          color: themeData.backgroundColor,
+                                          child: noteBox(i));
+                                      // Text(noteslist[i].note);
+                                    })
+                                : Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(w * 0.05),
+                                      child: Text(
+                                        'You dont have any notes !!!\n Please click on add button to add note',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                            color: _isDarkTheme()
+                                                ? Color.fromARGB(
+                                                    255, 215, 227, 233)
+                                                : Color.fromARGB(
+                                                    255, 34, 10, 76),
+                                            fontSize: h * 0.03,
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                      ],
+                    ),
+                    Align(
+                        alignment: Alignment.bottomRight,
+                        child: Container(
+                            // margin: EdgeInsets.only(
+                            //     bottom: max(
+                            //         MediaQuery.of(context)
+                            //             .viewPadding
+                            //             .bottom,
+                            //         MediaQuery.of(context)
+                            //             .viewInsets
+                            //             .bottom)),
+                            child: showSheet
+                                ? addBottomSheetAndroid(context)
+                                : floatingButton()))
+                  ],
+                ),
+              );
+            });
+          } else {
+            return Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  void showSnackbar(String s) {
+    SnackBar snackBar = SnackBar(
+      content: Text(s),
+      action: SnackBarAction(
+        label: 'CLOSE',
+        textColor: Colors.blue,
+        onPressed: () {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        },
+      ),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+  }
+
+  void getSearchResult() {
+    //     List<String> filters = [
+    //   'All',
+    //   'Technology',
+    //   'Title',
+    //   'Tag',
+    //   'Notes',
+    //   'Bullets',
+    //   'Code Title'
+    // ];
+    if (selectedFilters.contains('All') && selectedFilters.length == 1) {
+      noteslist = List.from(fullNoteslist);
+      if (searchController.text.isNotEmpty) {
+        noteslist.clear();
+        for (Note e in fullNoteslist) {
+          if (checkIsThisTextContains(e.tags.toLowerCase()) ||
+              checkIsThisTextContains(e.title.toLowerCase()) ||
+              checkIsThisTextContains(e.subtags.toLowerCase()) ||
+              checkIsThisTextContains(e.code.toLowerCase()) ||
+              checkIsThisTextContains(e.bullets.toLowerCase()) ||
+              checkIsThisTextContains(e.note.toLowerCase())) {
+            noteslist.add(e);
+
+            continue;
+          }
+        }
+      }
+
+      if (showOnlyMyNotes) {
+        // for (int i = 0; i < fullNoteslist.length;i++) {
+        //   if(notes)
+        // }
+        noteslist.removeWhere((e) {
+          return e.author != getCurrentUserEmailId();
+        });
+      }
+      androidState(() {});
+      return;
+    }
+    noteslist.clear();
+    // if (!showOnlyMyNotes) if (searchController.text.isEmpty) {
+    //   showSnackbar('Please enter the topic to search');
+    //   androidState(() {});
+    //   return;
+    // }
+
+    // print('iffff ${selectedFilters} && ${noteslist.length}');
+    // print(
+    //     'tagggs beforeeeeeeeeeeeeee ${noteslist.length} and ${fullNoteslist.length}');
+    bool isAdded = false;
+    for (Note e in fullNoteslist) {
+      print('noteis ${e.tags.toString()}');
+      isAdded = false;
+
+      if (showOnlyMyNotes) {
+        if (e.author != getCurrentUserEmailId()) {
+          continue;
+        }
+      }
+      if (selectedFilters.contains('Technology')) {
+        print('iff techno');
+        if (checkIsThisTextContains(e.tags.toLowerCase())) {
+          noteslist.add(e);
+          isAdded = true;
+          continue;
+        }
+      }
+
+      if (selectedFilters.contains('Title')) {
+        print('iff title');
+        if (checkIsThisTextContains(e.title.toLowerCase())) {
+          noteslist.add(e);
+          isAdded = true;
+          continue;
+        }
+
+        print('tagggs after ${noteslist.length}');
+
+        // fullNoteslist.forEach((e) {
+
+        ;
+      }
+
+      if (selectedFilters.contains('Notes')) {
+        print('iff Notes');
+        if (checkIsThisTextContains(e.note.toLowerCase())) {
+          noteslist.add(e);
+          isAdded = true;
+          continue;
+        }
+      }
+      if (selectedFilters.contains('Code Title')) {
+        String codetitle = e.code;
+        print('iff codet tile ${e.code}');
+        if (checkIsThisTextContains(e.code.toLowerCase())) {
+          noteslist.add(e);
+          isAdded = true;
+          continue;
+        }
+      }
+
+      if (selectedFilters.contains('Bullets')) {
+        print('iff bullets');
+        if (checkIsThisTextContains(e.bullets.toLowerCase())) {
+          noteslist.add(e);
+          isAdded = true;
+          continue;
+        }
+
+        // print('tagggs ${e.tags}');
+      }
+      print('iff Tag');
+      if (selectedFilters.contains('Tag')) {
+        if (checkIsThisTextContains(e.subtags.toLowerCase())) {
+          noteslist.add(e);
+          isAdded = true;
+          continue;
+        }
+      }
+    }
+    webState(
+      () {},
+    );
+    androidState(() {});
+  }
+
+  void loadThisDataInEditingBox() {
+    loadMainTags();
+    loadTitle();
+    loadSubbtags();
+    loadMainNote();
+    loadBulltes();
+    // loadCodes();
+    androidState(
+      () {},
+    );
+    webState(
+      () {},
+    );
+  }
+
+  void loadMainTags() {
+    mytags.clear();
+    List l = _editingNote.tags.split(commonSeparator);
+    mytags = List.from(l);
+  }
+
+  void loadTitle() {
+    titleController.clear();
+    titleController.text = _editingNote.title;
+  }
+
+  void loadSubbtags() {
+    subtags.clear();
+    List l = _editingNote.subtags.split(commonSeparator);
+    subtags = List.from(l);
+  }
+
+  void loadMainNote() {
+    noteController.clear();
+    noteController.text = _editingNote.note;
+  }
+
+  void loadBulltes() {
+    bullets.clear();
+    List l = _editingNote.bullets.split(commonSeparator);
+    bullets = List.from(l);
+  }
+
+  String getCurrentUserEmailId() {
+    return FirebaseAuth.instance.currentUser == null
+        ? 'sdycode@gmail.com'
+        : FirebaseAuth.instance.currentUser!.providerData[0].email.toString();
+  }
+
+  bool checkIsThisTextContains(String textContentInWhichToSearch) {
+    bool _hasText = false;
+    List _words = searchController.text.trim().toLowerCase().split(' ');
+    for (var e in _words) {
+      if (textContentInWhichToSearch.contains(e.trim())) {
+        _hasText = true;
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  _isDarkTheme() {
+    return CustomTheme().currentTheme == ThemeMode.dark;
+  }
+
+  askToDelete(int i) async {
+    await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Do you want to delete this note ?',
+                    style: TextStyle(fontSize: h * 0.025),
+                  ),
+                  Text(
+                    noteslist[i].title,
+                    style: TextStyle(fontSize: h * 0.022, color: Colors.grey),
+                  )
+                ],
+              ),
+              actions: [
+                TextButton(
+                  child: Text(
+                    'Delete',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  onPressed: () async {
+                    print('note deleted');
+                    noteInstance.doc(noteslist[i].id).delete();
+                    noteslist.removeAt(i);
+                    Navigator.pop(context);
+                    pdata.refresh();
+                  },
+                ),
+                TextButton(
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.green),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(context);
+                  },
+                )
+              ],
+            ));
+  }
+
+  void modifyNotesListToShowOnlyUserNotes() {
+    noteslist.removeWhere((e) {
+      return e.author != getCurrentUserEmailId();
+    });
+    androidState(() {});
+  }
+
+  void updateState() {
+    if (kIsWeb) {
+      webState(
+        () {},
+      );
+    } else {
+      androidState(
+        () {},
+      );
+    }
   }
 }
-
-// void addNewNote() {
-//   showModalBottomSheet(
-//       context: context,
-//       elevation: 6,
-//       isDismissible: false,
-//       isScrollControlled: true,
-//       enableDrag: true,
-//       shape: RoundedRectangleBorder(
-//         borderRadius: BorderRadius.vertical(
-//           top: Radius.circular(20),
-//         ),
-//       ),
-//       clipBehavior: Clip.antiAliasWithSaveLayer,
-//       // anchorPoint: Offset(w*0.50, h*0.6),
-//       builder: (context) {
-//         return DraggableScrollableSheet(
-//             controller: draggableScrollableController,
-//             maxChildSize: 0.8,
-//             initialChildSize: 0.8,
-//             minChildSize: 0.08,
-//             expand: false,
-//             snap: true,
-//             snapSizes: [0.08, 0.8],
-//             builder: (context, sheetscrollcont) {
-//               //  draggableScrollableController.addListener(() {
-//               //     print('scroll con ${draggableScrollableController.size}');
-//               //   });
-//               return SingleChildScrollView(
-//                 controller: sheetscrollcont,
-//                 child: draggableScrollableController.size < 0.082
-//                     ? Container(
-//                         height: h * 0.082,
-//                         width: w,
-//                         color: Colors.orange.shade200,
-//                         child: Row(
-//                           crossAxisAlignment: CrossAxisAlignment.center,
-//                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                           children: [
-//                             Container(
-//                               width: w * 0.7,
-//                               child: FittedBox(
-//                                 child: Padding(
-//                                   padding: EdgeInsets.all(w * 0.05),
-//                                   child: Text('Do you want to save data ?'),
-//                                 ),
-//                               ),
-//                             ),
-//                             IconButton(
-//                                 padding: EdgeInsets.all(2),
-//                                 iconSize: (w * 0.08),
-//                                 onPressed: () {},
-//                                 icon: Icon(
-//                                   Icons.check,
-//                                 )),
-//                             IconButton(
-//                                 padding: EdgeInsets.all(2),
-//                                 iconSize: (w * 0.08),
-//                                 onPressed: () {
-//                                   Navigator.pop(context);
-//                                 },
-//                                 icon: Icon(
-//                                   Icons.close,
-//                                 )),
-//                           ],
-//                         ))
-//                     : Container(
-//                         child: Column(
-//                           children: [
-//                             Container(
-//                               height: 2,
-//                               color: Colors.transparent,
-//                             ),
-//                             titleWidget(),
-//                             titleWidget(),
-
-//                             titleWidget(), titleWidget(), titleWidget(),
-//                             titleWidget(), titleWidget(), titleWidget(),
-//                             titleWidget(), titleWidget(), titleWidget(),
-//                             titleWidget(), titleWidget(), titleWidget(),
-//                             SizedBox(
-//                               height: max(
-//                                   MediaQuery.of(context).viewPadding.bottom,
-//                                   MediaQuery.of(context).viewInsets.bottom),
-//                             )
-//                             // tagWidget(),
-//                             // subtagsWidget(),
-//                           ],
-//                         ),
-//                       ),
-//               );
-//             });
-//       });
-// }

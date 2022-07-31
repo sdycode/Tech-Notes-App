@@ -1,16 +1,23 @@
+import 'dart:io';
 import 'dart:math';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
 // import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:stick_box/constants.dart';
+import 'package:stick_box/constants/constants.dart';
 import 'package:stick_box/main.dart';
-import 'package:stick_box/sizes.dart';
+import 'package:stick_box/constants/sizes.dart';
+import 'package:stick_box/screens/login_screen.dart';
 
 // import 'package:store_redirect/store_redirect.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../utils/provder.dart';
 import '../utils/shared.dart';
 
 // import '../constants/colors.dart';
@@ -33,648 +40,646 @@ class _AppDrawerState extends State<AppDrawer> {
   double webFont = Sizes().sw * 0.02;
   double minVerticalPadding = Sizes().sh * 0.024;
   String passs = '';
+  late Data pdata;
+  User? _user;
   @override
   Widget build(BuildContext context) {
-    return kIsWeb
-        ? SafeArea(
+    pdata = Provider.of<Data>(context);
+    print('firebsss ${FirebaseAuth.instance}');
+    // if (!kIsWeb) {
+
+    //      print( 'user     ------appdd ${_user?.providerData[0].email} //  ${_user?.displayName} and ${_user?.email}');
+    //   StreamBuilder<User?>(
+    //     stream: FirebaseAuth.instance.authStateChanges(),
+    //     builder: (BuildContext context, AsyncSnapshot<dynamic> snapshot) {
+    //       if (snapshot.hasData) {
+    //         _user = snapshot.data as User;
+    //         print( 'user appdd ${_user?.providerData[0].email} //  ${_user?.displayName} and ${_user?.email}');
+    //         return Container();
+    //       } else {
+    //         print(
+    //             'user appdd   null  ${_user?.providerData[0].email} //  ${_user?.displayName} and ${_user?.email}');
+    //         return Container();
+    //       }
+    //     },
+    //   );
+    // }
+    return kIsWeb ? webBar() : androidBar();
+  }
+
+  webBar() {
+    return SafeArea(
+      child: Container(
+        width: max(Sizes().sw * 0.3, 200),
+        height: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(30),
+            bottomRight: Radius.circular(30),
+          ),
+          color: Colors.transparent,
+          // image: DecorationImage(
+          //     image: AssetImage('assets/drbg1.jpg'), fit: BoxFit.cover),
+        ),
+        margin: EdgeInsets.only(
+            top: MediaQuery.of(context).viewPadding.top * 2,
+            bottom: MediaQuery.of(context).viewPadding.top * 2),
+        // color: Colors.red,
+        child: ClipRRect(
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(30),
+            bottomRight: Radius.circular(30),
+          ),
+          child: Drawer(
+            // backgroundColor: Colors.white,
             child: Container(
-              width: max(Sizes().sw * 0.3, 200),
-              height: double.infinity,
+              // color: Colors.white,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.only(
-                  topRight: Radius.circular(30),
-                  bottomRight: Radius.circular(30),
-                ),
                 color: Colors.transparent,
-                image: DecorationImage(
-                    image: AssetImage('assets/drbg1.jpg'), fit: BoxFit.cover),
+                // image: DecorationImage(
+                //     image: AssetImage('assets/bg1.jpg'), fit: BoxFit.cover),
               ),
-              margin: EdgeInsets.only(
-                  top: MediaQuery.of(context).viewPadding.top * 2,
-                  bottom: MediaQuery.of(context).viewPadding.top * 2),
-              // color: Colors.red,
-              child: ClipRRect(
-                borderRadius: BorderRadius.only(
-                  topRight: Radius.circular(30),
-                  bottomRight: Radius.circular(30),
-                ),
-                child: Drawer(
-                  // backgroundColor: Colors.white,
-                  child: Container(
-                    // color: Colors.white,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      image: DecorationImage(
-                          image: AssetImage('assets/bg1.jpg'),
-                          fit: BoxFit.cover),
+              child: ListView(
+                children: [
+                  SizedBox(
+                    height: Sizes().sh * 0.06,
+                  ),
+                  InkWell(
+                    onTap: () {
+                      Navigator.pop(context);
+                      pdata.refresh();
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Icon(
+                        Icons.refresh,
+                        size: webiconW*0.8,
+                        color: Colors.black,
+                      ),
+                      title: Text(
+                        'Refresh',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
                     ),
-                    child: ListView(
-                      children: [
-                        // Align(
-                        //     alignment: Alignment.topRight,
-                        //     child: InkWell(
-                        //         onTap: () {
-                        //           Navigator.pop(context);
-                        //         },
-                        //         child: Container(
-                        //            margin: EdgeInsets.all(10),
-                        //           child: Icon(Icons.close, size:sh * 0.04)))),
-                        SizedBox(
-                          height: Sizes().sh * 0.06,
-                        ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      // launch(C.appsharelink);
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/starr.png',
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        'Rate Us',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      customTheme.toggleTheme();
+                      Navigator.pop(context);
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/theme.png',
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        customTheme.currentTheme == ThemeMode.dark
+                            ? 'Light'
+                            : 'Dark',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      launch(C.playstorelink);
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/playstore.png',
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        'More Apps',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      launch(C.linkedinlink);
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/linkedin.png',
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        'Linked In',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      launch(C.youtubevideolink);
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/youtube.png',
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        'YouTube',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      launch("https://github.com/sdycode");
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/git.png',
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        'Github',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      // Share.share(C.appsharelink);
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/share.png',
+                        color: Colors.deepPurple,
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        'Share',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  Opacity(
+                    opacity: 0.0,
+                    child: InkWell(
+                      onTap: () {
+                        showDialog(
+                            context: context,
+                            builder: (context) {
+                              TextEditingController pass =
+                                  TextEditingController();
+                              bool isPass = false;
 
-                        InkWell(
-                          onTap: () {
-                            // launch(C.appsharelink);
-
-                            showDialog(
-                                context: context,
-                                builder: (context) {
-                                  TextEditingController pass =
-                                      TextEditingController();
-                                  bool isPass = false;
-
-                                  return Dialog(
-                                    child: Container(
-                                      width: w * 0.4,
-                                      height: h * 0.6,
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceEvenly,
-                                        children: [
-                                          Container(
-                                            height: h * 0.15,
-                                            width: w * 0.36,
-                                            child: TextField(
-                                              controller: pass,
-                                            ),
-                                          ),
-                                          GestureDetector(
-                                            onTap: () {
-                                              if (isPass) {
-                                                Shared.setAdmin(true);
-                                                print(
-                                                    'isadmin after set ${Shared.isAdmin}');
-                                                Navigator.pop(context);
-                                              }
-                                            },
-                                            child: Container(
-                                              width: w * 0.4,
-                                              height: h * 0.15,
-                                              color: Colors.transparent,
-                                            ),
-                                          ),
-                                          ElevatedButton(
-                                              onPressed: () {
-                                                if (pass.text == 'shu22396') {
-                                                  setState(() {
-                                                    isPass = true;
-                                                    passs = pass.text;
-                                                  });
-                                                } else {
-                                                  Shared.setAdmin(false);
-                                                  print(
-                                                      'isadmin after ${Shared.isAdmin}');
-                                                  pass.clear();
-                                                  Navigator.pop(context);
-                                                }
-                                              },
-                                              child: Text('Go')),
-                                        ],
+                              return Dialog(
+                                child: Container(
+                                  width: w * 0.4,
+                                  height: h * 0.6,
+                                  child: Column(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
+                                    children: [
+                                      Container(
+                                        height: h * 0.15,
+                                        width: w * 0.36,
+                                        child: TextField(
+                                          controller: pass,
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                });
-                          },
-                          child: ListTile(
-                            minVerticalPadding: minVerticalPadding,
-                            leading: Image.asset(
-                              'assets/man1.webp',
-                              // 'assets/man1.webp',
-                              width: webiconW,
-                            ),
-                            title: Text(
-                              'Admin',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: webFont),
-                            ),
-                          ),
+                                      GestureDetector(
+                                        onTap: () {
+                                          if (isPass) {
+                                            Shared.setAdmin(true);
+                                            print(
+                                                'isadmin after set ${Shared.isAdmin}');
+                                            Navigator.pop(context);
+                                          }
+                                        },
+                                        child: Container(
+                                          width: w * 0.4,
+                                          height: h * 0.15,
+                                          color: Colors.transparent,
+                                        ),
+                                      ),
+                                      ElevatedButton(
+                                          onPressed: () {
+                                            if (pass.text == 'shu22396') {
+                                              setState(() {
+                                                isPass = true;
+                                                passs = pass.text;
+                                              });
+                                            } else {
+                                              Shared.setAdmin(false);
+                                              print(
+                                                  'isadmin after ${Shared.isAdmin}');
+                                              pass.clear();
+                                              Navigator.pop(context);
+                                            }
+                                          },
+                                          child: Text('Go')),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            });
+                      },
+                      child: ListTile(
+                        minVerticalPadding: minVerticalPadding,
+                        leading: Image.asset(
+                          'assets/man1.webp',
+                          // 'assets/man1.webp',
+                          width: webiconW,
                         ),
-                        InkWell(
-                          onTap: () {
-                            // launch(C.appsharelink);
-                          },
-                          child: ListTile(
-                            minVerticalPadding: minVerticalPadding,
-                            leading: Image.asset(
-                              'assets/starr.png',
-                              width: webiconW,
-                            ),
-                            title: Text(
-                              'Rate Us',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: webFont),
-                            ),
-                          ),
+                        title: Text(
+                          'Admin',
+                          style:
+                              TextStyle(color: Colors.black, fontSize: webFont),
                         ),
-                        InkWell(
-                          onTap: () {
-                            customTheme.toggleTheme();
-                            Navigator.pop(context);
-                          },
-                          child: ListTile(
-                            minVerticalPadding: minVerticalPadding,
-                            leading: Image.asset(
-                              'assets/theme.png',
-                              width: webiconW,
-                            ),
-                            title: Text(
-                              customTheme.currentTheme == ThemeMode.dark
-                                  ? 'Light'
-                                  : 'Dark',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: webFont),
-                            ),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () {
-                            // launch(C.playstorelink);
-                          },
-                          child: ListTile(
-                            minVerticalPadding: minVerticalPadding,
-                            leading: Image.asset(
-                              'assets/playstore.png',
-                              width: webiconW,
-                            ),
-                            title: Text(
-                              'More Apps',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: webFont),
-                            ),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () {
-                            // launch(C.linkedinlink);
-                          },
-                          child: ListTile(
-                            minVerticalPadding: minVerticalPadding,
-                            leading: Image.asset(
-                              'assets/linkedin.png',
-                              width: webiconW,
-                            ),
-                            title: Text(
-                              'Linked In',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: webFont),
-                            ),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () {
-                            // launch(C.appsharelink);
-                          },
-                          child: ListTile(
-                            minVerticalPadding: minVerticalPadding,
-                            leading: Image.asset(
-                              'assets/youtube.png',
-                              width: webiconW,
-                            ),
-                            title: Text(
-                              'YouTube',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: webFont),
-                            ),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () {
-                            launch("https://github.com/sdycode");
-                          },
-                          child: ListTile(
-                            minVerticalPadding: minVerticalPadding,
-                            leading: Image.asset(
-                              'assets/git.png',
-                              width: webiconW,
-                            ),
-                            title: Text(
-                              'Github',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: webFont),
-                            ),
-                          ),
-                        ),
-
-                        InkWell(
-                          onTap: () {
-                            // Share.share(C.appsharelink);
-                          },
-                          child: ListTile(
-                            minVerticalPadding: minVerticalPadding,
-                            leading: Image.asset(
-                              'assets/share.png',
-                              color: Colors.deepPurple,
-                              width: webiconW,
-                            ),
-                            title: Text(
-                              'Share',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: webFont),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
-          )
-        : SafeArea(
+          ),
+        ),
+      ),
+    );
+  }
+
+  androidBar() {
+    // FirebaseAuth.instance.currentUser;
+    minVerticalPadding = Sizes().sh * 0.014;
+    iconH = 0.045;
+    webiconW = Sizes().sw * 0.09;
+    webFont = Sizes().sw * 0.05;
+    return SafeArea(
+      child: Container(
+        width: Sizes().sw * 0.65,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(30),
+            bottomRight: Radius.circular(30),
+          ),
+          color: Colors.transparent,
+          // image: DecorationImage(
+          //     image: AssetImage('assets/drbg1.jpg'), fit: BoxFit.cover),
+        ),
+        margin: EdgeInsets.only(
+            top: MediaQuery.of(context).viewPadding.top * 1,
+            bottom: MediaQuery.of(context).viewPadding.top * 1),
+        // color: Colors.red,
+        child: ClipRRect(
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(30),
+            bottomRight: Radius.circular(30),
+          ),
+          child: Drawer(
+            // backgroundColor: Colors.white,
             child: Container(
-              width: Sizes().sw * 0.7,
-              height: double.infinity,
+              // color: Colors.white,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(30),
-                  bottomLeft: Radius.circular(30),
-                ),
                 color: Colors.transparent,
-                image: DecorationImage(
-                    image: AssetImage('assets/drbg1.jpg'), fit: BoxFit.cover),
+                // image: DecorationImage(
+                //     image: AssetImage('assets/bg1.jpg'), fit: BoxFit.cover),
               ),
-              margin: EdgeInsets.only(
-                  top: MediaQuery.of(context).viewPadding.top * 2,
-                  bottom: MediaQuery.of(context).viewPadding.top * 2),
-              // color: Colors.red,
-              child: ClipRRect(
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(30),
-                  topLeft: Radius.circular(30),
-                ),
-                child: Drawer(
-                  // backgroundColor: Colors.white,
-                  child: Container(
-                    // color: Colors.white,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      image: DecorationImage(
-                          image: AssetImage('assets/bg1.jpg'),
-                          fit: BoxFit.cover),
-                    ),
-                    child: ListView(
-                      children: [
-                        // Align(
-                        //     alignment: Alignment.topRight,
-                        //     child: InkWell(
-                        //         onTap: () {
-                        //           Navigator.pop(context);
-                        //         },
-                        //         child: Container(
-                        //            margin: EdgeInsets.all(10),
-                        //           child: Icon(Icons.close, size:sh * 0.04)))),
-                        SizedBox(
-                          height: Sizes().sh * 0.1,
-                        ),
-                        InkWell(
-                          onTap: () {
-                            // launch(C.appsharelink);
-                          },
-                          child: ListTile(
-                            leading: Image.asset(
-                              'assets/starr.png',
-                              width: w * 0.1,
-                            ),
-                            title: Text(
-                              'Rate Us',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: w * 0.06),
-                            ),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () {
-                            // launch(C.playstorelink);
-                          },
-                          child: ListTile(
-                            leading: Image.asset(
-                              'assets/playstore.png',
-                              width: w * 0.1,
-                            ),
-                            title: Text(
-                              'More Apps',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: w * 0.06),
-                            ),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () {
-                            // launch(C.linkedinlink);
-                          },
-                          child: ListTile(
-                            leading: Image.asset(
-                              'assets/linkedin.png',
-                              width: w * 0.1,
-                            ),
-                            title: Text(
-                              'Linked In',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: w * 0.06),
-                            ),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () {
-                            // launch(C.appsharelink);
-                          },
-                          child: ListTile(
-                            leading: Image.asset(
-                              'assets/youtube.png',
-                              width: w * 0.1,
-                            ),
-                            title: Text(
-                              'YouTube',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: w * 0.06),
-                            ),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () {
-                            launch("https://github.com/sdycode");
-                          },
-                          child: ListTile(
-                            leading: Image.asset(
-                              'assets/git.png',
-                              width: w * 0.1,
-                            ),
-                            title: Text(
-                              'Github',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: w * 0.06),
-                            ),
-                          ),
-                        ),
-
-                        InkWell(
-                          onTap: () {
-                            // Share.share(C.appsharelink);
-                          },
-                          child: ListTile(
-                            leading: Image.asset(
-                              'assets/share.png',
-                              color: Colors.deepPurple,
-                              width: w * 0.1,
-                            ),
-                            title: Text(
-                              'Share',
-                              style: TextStyle(
-                                  color: Colors.black, fontSize: w * 0.06),
-                            ),
-                          ),
-                        ),
-                      ],
+              child: ListView(
+                children: [
+                  SizedBox(
+                    height: h*0.03,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Center(
+                      child: Text(
+                        FirebaseAuth.instance.currentUser == null
+                            ? ''
+                            : FirebaseAuth
+                                .instance.currentUser!.providerData[0].email
+                                .toString(),
+                        style: TextStyle(
+                            fontSize: w * 0.05,
+                            color: Color.fromARGB(255, 19, 4, 75),
+                            fontWeight: FontWeight.w800),
+                      ),
                     ),
                   ),
-                ),
+                  SizedBox(
+                    height: h*0.03,
+                  ),
+                  InkWell(
+                    onTap: () {
+                      Navigator.pop(context);
+                      pdata.refresh();
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Icon(
+                        Icons.refresh,
+                        size: webiconW,
+                        color: Colors.black,
+                      ),
+                      title: Text(
+                        'Refresh',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+
+                  InkWell(
+                    onTap: () {
+                      launch(C.appsharelink);
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/starr.png',
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        'Rate Us',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      customTheme.toggleTheme();
+                      Navigator.pop(context);
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/theme.png',
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        customTheme.currentTheme == ThemeMode.dark
+                            ? 'Light'
+                            : 'Dark',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      launch(C.playstorelink);
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/playstore.png',
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        'More Apps',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      launch(C.linkedinlink);
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/linkedin.png',
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        'Linked In',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      launch(C.youtubevideolink);
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/youtube.png',
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        'YouTube',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      launch("https://github.com/sdycode");
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/git.png',
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        'Github',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      // Share.share(C.appsharelink);
+                    },
+                    child: ListTile(
+                      minVerticalPadding: minVerticalPadding,
+                      leading: Image.asset(
+                        'assets/share.png',
+                        color: Colors.deepPurple,
+                        width: webiconW,
+                      ),
+                      title: Text(
+                        'Share',
+                        style:
+                            TextStyle(color: Colors.black, fontSize: webFont),
+                      ),
+                    ),
+                  ),
+                  FirebaseAuth.instance.currentUser != null
+                      ? InkWell(
+                          onTap: () async {
+                            await FirebaseAuth.instance
+                                .signOut()
+                                .then((value) async {
+                              GoogleSignIn().signOut();
+                              Navigator.pop(context);
+                              Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: ((context) => LoginScreen())));
+                              await _clearCache();
+                            });
+                            // FirebaseAuth.instance.userChanges();
+                          },
+                          child: ListTile(
+                            minVerticalPadding: minVerticalPadding,
+                            leading: Image.asset(
+                              'assets/signout.png',
+                              color: Color.fromARGB(255, 34, 26, 106),
+                              width: webiconW,
+                            ),
+                            title: Text(
+                              'Sign Out',
+                              style: TextStyle(
+                                  color: Colors.black, fontSize: webFont),
+                            ),
+                          ),
+                        )
+                      : Container(),
+                  // Opacity(
+                  //   opacity: 0.0,
+                  //   child: InkWell(
+                  //     splashColor: Colors.transparent,
+                  //     onLongPress: () {
+                  //       launch(C.appsharelink);
+
+                  //       showDialog(
+                  //           context: context,
+                  //           builder: (context) {
+                  //             TextEditingController pass =
+                  //                 TextEditingController();
+                  //             bool isPass = false;
+
+                  //             return Dialog(
+                  //               child: Container(
+                  //                 width: w * 0.4,
+                  //                 height: h * 0.6,
+                  //                 child: Column(
+                  //                   mainAxisAlignment:
+                  //                       MainAxisAlignment.spaceEvenly,
+                  //                   children: [
+                  //                     Container(
+                  //                       height: h * 0.15,
+                  //                       width: w * 0.36,
+                  //                       child: TextField(
+                  //                         controller: pass,
+                  //                       ),
+                  //                     ),
+                  //                     GestureDetector(
+                  //                       onTap: () {
+                  //                         if (isPass) {
+                  //                           Shared.setAdmin(true);
+                  //                           print(
+                  //                               'isadmin after set ${Shared.isAdmin}');
+                  //                           Navigator.pop(context);
+                  //                         }
+                  //                       },
+                  //                       child: Container(
+                  //                         // height: double.infinity,
+                  //                         // width: double.infinity,
+                  //                         width: w * 0.4,
+                  //                         height: h * 0.15,
+                  //                         color: Colors.red.shade100,
+                  //                       ),
+                  //                     ),
+                  //                     ElevatedButton(
+                  //                         onPressed: () {
+                  //                           if (pass.text == 'shu22396') {
+                  //                             Shared.setAdmin(true);
+                  //                             Navigator.pop(context);
+                  //                             setState(() {
+                  //                               isPass = true;
+                  //                               passs = pass.text;
+                  //                             });
+                  //                           } else {
+                  //                             Shared.setAdmin(false);
+                  //                             print(
+                  //                                 'isadmin after ${Shared.isAdmin}');
+                  //                             pass.clear();
+                  //                             Navigator.pop(context);
+                  //                           }
+                  //                         },
+                  //                         child: Text('Go')),
+                  //                   ],
+                  //                 ),
+                  //               ),
+                  //             );
+                  //           });
+                  //     },
+                  //     child: ListTile(
+                  //       minVerticalPadding: minVerticalPadding,
+                  //       leading: Image.asset(
+                  //         'assets/man1.webp',
+                  //         // 'assets/man1.webp',
+                  //         width: webiconW,
+                  //       ),
+                  //       title: Text(
+                  //         'Admin',
+                  //         style:
+                  //             TextStyle(color: Colors.black, fontSize: webFont),
+                  //       ),
+                  //     ),
+                  //   ),
+                  // ),
+                ],
               ),
             ),
-          );
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future _clearCache() async {
+    await _deleteCacheDir();
+    await _deleteAppDir();
+  }
+
+  Future<void> _deleteCacheDir() async {
+    var tempDir = await getTemporaryDirectory();
+
+    if (tempDir.existsSync()) {
+      tempDir.deleteSync(recursive: true);
+    }
+  }
+
+  Future<void> _deleteAppDir() async {
+    var appDocDir = await getApplicationDocumentsDirectory();
+
+    if (appDocDir.existsSync()) {
+      appDocDir.deleteSync(recursive: true);
+    }
   }
 }
-
-/*
-
-
- children: [
-                // Align(
-                //     alignment: Alignment.topRight,
-                //     child: InkWell(
-                //         onTap: () {
-                //           Navigator.pop(context);
-                //         },
-                //         child: Container(
-                //            margin: EdgeInsets.all(10),
-                //           child: Icon(Icons.close, size:sh * 0.04)))),
-                Container(
-                  margin: EdgeInsets.all(sh*0.05),
-                  height:sh * 0.3, 
-                  
-                  
-                  child:const FittedBox( 
-                    child: Text(
-                      "Photo Editor\n&\nBackground\nRemover",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontFamily: 'LifeSavers-Regular'),
-                    ) ,
-                  ),
-                ),
-                Container(
-                  margin: EdgeInsets.only(top: sh*0.01),
-                     height:sh*0.05, 
-                  child: ListTile(
-                    leading: Container(
-                      height:sh*0.05, 
-                      child: Image.asset('assets/icons/new/help.webp', 
-
-                      
-                      fit: BoxFit.fitHeight, 
-                      
-                      color: Colors.black,),
-                    ),
-                    title: Container(
-                       margin: EdgeInsets.only(left :sw*0.005),
-                      height:sh*0.05, 
-                      child: const Align( 
-                        alignment: Alignment.centerLeft,
-                        child: FittedBox( 
-                          fit: BoxFit.fitHeight, 
-                          child: Text('Help & Feedback', 
-                          textAlign: TextAlign.left, 
-                                       )),
-                      )),
-                    onTap: () {
-                      launch("mailto:support@touchzing.com");
-                    },
-                  ),
-                ),
-                Container(
-                  height:sh*0.05, 
-                    margin: EdgeInsets.only(top: sh*0.01),
-                  child: ListTile(
-                    leading: Container(
-                      height:sh*0.05, 
-                      child: Image.asset('assets/icons/new/about.webp', fit: BoxFit.fitHeight,  color: Colors.black,),
-                    ),
-                    title:Container(
-                       margin: EdgeInsets.only(left :sw*0.005),
-                      height:sh*0.05, 
-                      child:const Align( 
-                        alignment: Alignment.centerLeft,
-                        child: FittedBox( 
-                          fit: BoxFit.fitHeight, 
-                          child: Text('About us', 
-                          textAlign: TextAlign.left, 
-                                       )),
-                      )),
-                    onTap: () {
-                      launch("https://www.touchzing.com/about.php");
-                    },
-                  ),
-                ),
-                Container(
-                  height:sh*0.05,   margin: EdgeInsets.only(top: sh*0.01),
-                  child: ListTile(
-                    leading:
-                      Container(
-                      height:sh*0.05, 
-                      child: Image.asset('assets/icons/new/privacy.webp',fit: BoxFit.fitHeight, color: Colors.black,),
-                    ),
-                    title:Container(
-                       margin: EdgeInsets.only(left :sw*0.005),
-                      height:sh*0.05, 
-                      child:const Align( 
-                        alignment: Alignment.centerLeft,
-                        child: FittedBox( 
-                          fit: BoxFit.fitHeight, 
-                          child: Text('Privacy Policy', 
-                          textAlign: TextAlign.left, 
-                                       )),
-                      )),
-                    onTap: () {
-                      launch("http://www.touchzing.com/privacy/");
-                    },
-                  ),
-                ),
-                Container
-                (
-                  height:sh*0.05,   margin: EdgeInsets.only(top: sh*0.01),
-                  child: ListTile(
-                    leading: Container(
-                      height:sh*0.05, 
-                      child: Image.asset('assets/icons/new/rateus.webp',fit: BoxFit.fitHeight, color: Colors.black,),
-                    ),
-                    title: Container(
-                       margin: EdgeInsets.only(left :sw*0.005),
-                      height:sh*0.05, 
-                      child:const Align( 
-                        alignment: Alignment.centerLeft,
-                        child: FittedBox( 
-                          fit: BoxFit.fitHeight, 
-                          child: Text('Rate us', 
-                          textAlign: TextAlign.left, 
-                                       )),
-                      )),
-                    onTap: () {
-                      // StoreRedirect.redirect(
-                      //   androidAppId:
-                      //       "com.tz.picture.quotes.creator.insta.caption.pics.poetry",
-                      // );
-                      // launch("http://www.touchzing.com/privacy/");
-                    },
-                  ),
-                ),
-          
-              ],
-           
-*/
-
-/*
- children: [
-              Align(
-                  alignment: Alignment.topRight,
-                  child: InkWell(
-                      onTap: () {
-                        Navigator.pop(context);
-                      },
-                      child: Container(
-                         margin: EdgeInsets.all(10),
-                        child: Icon(Icons.close, size: Sizes().sh * 0.04)))),
-              SizedBox(
-                height: Sizes().sh * 0.08,
-              ),
-              ListTile(
-                leading: Icon(Icons.headphones, 
-                  // MdiIcons.helpCircleOutline,
-                    size: Sizes().sh * 0.05),
-                title: Container(
-                   margin: EdgeInsets.only(left :Sizes().sw*0.005),
-                  height: Sizes().sh*0.05, 
-                  child: const Align( 
-                    alignment: Alignment.centerLeft,
-                    child: FittedBox( 
-                      fit: BoxFit.fitHeight, 
-                      child: Text('Help & Feedback', 
-                      textAlign: TextAlign.left, 
-                                   )),
-                  )),
-                onTap: () {
-                  launch("mailto:support@touchzing.com");
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.privacy_tip_outlined,
-                    size: Sizes().sh * 0.05),
-                title:Container(
-                   margin: EdgeInsets.only(left :Sizes().sw*0.005),
-                  height: Sizes().sh*0.05, 
-                  child:const Align( 
-                    alignment: Alignment.centerLeft,
-                    child: FittedBox( 
-                      fit: BoxFit.fitHeight, 
-                      child: Text('About us', 
-                      textAlign: TextAlign.left, 
-                                   )),
-                  )),
-                onTap: () {
-                  launch("https://www.touchzing.com/about.php");
-                },
-              ),
-              ListTile(
-                leading:
-                    Icon(Icons.ac_unit_outlined, 
-                      
-                      // MdiIcons.information, 
-                       size: Sizes().sh * 0.05),
-                title:Container(
-                   margin: EdgeInsets.only(left :Sizes().sw*0.005),
-                  height: Sizes().sh*0.05, 
-                  child:const Align( 
-                    alignment: Alignment.centerLeft,
-                    child: FittedBox( 
-                      fit: BoxFit.fitHeight, 
-                      child: Text('Privacy Policy', 
-                      textAlign: TextAlign.left, 
-                                   )),
-                  )),
-                onTap: () {
-                  launch("http://www.touchzing.com/privacy/");
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.rate_review, size: Sizes().sh * 0.05),
-                title: Container(
-                   margin: EdgeInsets.only(left :Sizes().sw*0.005),
-                  height: Sizes().sh*0.05, 
-                  child:const Align( 
-                    alignment: Alignment.centerLeft,
-                    child: FittedBox( 
-                      fit: BoxFit.fitHeight, 
-                      child: Text('Rate us', 
-                      textAlign: TextAlign.left, 
-                                   )),
-                  )),
-                onTap: () {
-                  StoreRedirect.redirect(
-                    androidAppId:
-                        "com.tz.picture.quotes.creator.insta.caption.pics.poetry",
-                  );
-                  // launch("http://www.touchzing.com/privacy/");
-                },
-              ),
-            ],
-          
-
-*/
