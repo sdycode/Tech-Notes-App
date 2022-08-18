@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -33,6 +34,7 @@ class AppDrawer extends StatefulWidget {
 }
 
 class _AppDrawerState extends State<AppDrawer> {
+  late PackageInfo packageInfo;
   double w = Sizes().sw;
   double h = Sizes().sh;
   double iconH = 0.045;
@@ -42,6 +44,11 @@ class _AppDrawerState extends State<AppDrawer> {
   String passs = '';
   late Data pdata;
   User? _user;
+  @override
+  initState() {
+    super.initState();
+  }
+
   @override
   Widget build(BuildContext context) {
     pdata = Provider.of<Data>(context);
@@ -113,7 +120,7 @@ class _AppDrawerState extends State<AppDrawer> {
                       minVerticalPadding: minVerticalPadding,
                       leading: Icon(
                         Icons.refresh,
-                        size: webiconW*0.8,
+                        size: webiconW * 0.8,
                         color: Colors.black,
                       ),
                       title: Text(
@@ -373,8 +380,40 @@ class _AppDrawerState extends State<AppDrawer> {
               child: ListView(
                 children: [
                   SizedBox(
-                    height: h*0.03,
+                    height: h * 0.03,
                   ),
+                  if (kDebugMode)
+                    Container(
+                      child: FutureBuilder(
+                          future: _initPackageInfo(),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData) {
+                              packageInfo = snapshot.data as PackageInfo;
+                              return Container(
+                                  child: Text(
+                                      '${packageInfo.buildNumber} - ${packageInfo.version}'));
+                            } else {
+                              return Container();
+                            }
+                          }),
+                    ),
+              FirebaseAuth.instance.currentUser == null ? Container():     Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Container(
+                        height: w*0.28,
+                        width: w*0.28,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          image: DecorationImage(
+                            
+                            scale: 0.7,
+                            image: NetworkImage(FirebaseAuth
+                            .instance.currentUser!.providerData[0].photoURL!))
+                        ),
+                        
+                      )
+                     
+                      ),
                   Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Center(
@@ -392,7 +431,7 @@ class _AppDrawerState extends State<AppDrawer> {
                     ),
                   ),
                   SizedBox(
-                    height: h*0.03,
+                    height: h * 0.03,
                   ),
                   InkWell(
                     onTap: () {
@@ -537,13 +576,16 @@ class _AppDrawerState extends State<AppDrawer> {
                       ),
                     ),
                   ),
+                  Divider(color: Colors.grey,), 
                   FirebaseAuth.instance.currentUser != null
                       ? InkWell(
                           onTap: () async {
                             await FirebaseAuth.instance
                                 .signOut()
                                 .then((value) async {
-                              GoogleSignIn().signOut();
+                        GoogleSignInAccount?  g =  await    GoogleSignIn().signOut();
+                       
+                           Shared.setLoginStatus(false);
                               Navigator.pop(context);
                               Navigator.pushReplacement(
                                   context,
@@ -567,7 +609,24 @@ class _AppDrawerState extends State<AppDrawer> {
                             ),
                           ),
                         )
-                      : Container(),
+                      : InkWell(
+                          onTap: () async {
+                            Navigator.pushReplacement(
+            context, MaterialPageRoute(builder: (c) => LoginScreen()));
+                          },
+                          child: ListTile(
+                            minVerticalPadding: minVerticalPadding,
+                            leading: Image.asset(
+                      'assets/google.png',
+                      width: webiconW,
+                      height: webiconW),
+                            title: Text(
+                              'Sign In',
+                              style: TextStyle(
+                                  color: Colors.black, fontSize: webFont),
+                            ),
+                          ),
+                        ),
                   // Opacity(
                   //   opacity: 0.0,
                   //   child: InkWell(
@@ -681,5 +740,9 @@ class _AppDrawerState extends State<AppDrawer> {
     if (appDocDir.existsSync()) {
       appDocDir.deleteSync(recursive: true);
     }
+  }
+
+  Future _initPackageInfo() async {
+    return packageInfo = await PackageInfo.fromPlatform();
   }
 }

@@ -8,7 +8,7 @@ if (localPropertiesFile.exists()) {
 
 def flutterRoot = localProperties.getProperty('flutter.sdk')
 if (flutterRoot == null) {
-    throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
+    throw new GradleException('Flutter SDK not found. Define location with flutter.sdk in the local.properties file.')
 }
 
 def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
@@ -44,12 +44,13 @@ android {
     }
 
     defaultConfig {
+        /* groovylint-disable-next-line LineLength */
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId "com.sdyapps22.flutternotes"
+        applicationId 'com.sdyapps22.flutternotes'
         // You can update the following values to match your application needs.
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-build-configuration.
         minSdkVersion 21
-        targetSdkVersion 30
+        targetSdkVersion 31
         multiDexEnabled true
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
@@ -73,18 +74,23 @@ dependencies {
     // compile 'com.android.support:multidex:1.0.3'
     implementation 'com.android.support:multidex:1.0.1'
     implementation 'com.android.support:multidex:1.0.3'
-    implementation "androidx.work:work-runtime:2.7.1"
-    implementation("com.squareup.okhttp3:okhttp:4.9.3")
-     // Import the Firebase BoM
+    implementation 'androidx.work:work-runtime:2.7.1'
+    implementation('com.squareup.okhttp3:okhttp:4.9.3')
+    // Import the Firebase BoM
     implementation platform('com.google.firebase:firebase-bom:30.2.0')
+    implementation 'com.google.firebase:firebase-core'
 
+    implementation('com.google.firebase:firebase-auth') {
+            exclude module: 'play-services-safetynet'
+    }
 
   // Add the dependency for the Firebase SDK for Google Analytics
   // When using the BoM, don't specify versions in Firebase dependencies
-    implementation 'com.google.firebase:firebase-analytics'
+//    implementation 'com.google.firebase:firebase-analytics'
 
-
-  // Add the dependencies for any other desired 
-
-    
+// Add the dependencies for any other desired
 }
+
+// implementation('com.google.firebase:firebase-auth') {
+//         exclude module: "play-services-safetynet"
+//     }

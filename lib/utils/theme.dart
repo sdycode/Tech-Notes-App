@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:stick_box/utils/shared.dart';
 
 // CustomTheme customTheme = CustomTheme();
 
@@ -9,8 +10,9 @@ class CustomTheme with ChangeNotifier {
   ThemeMode get currentTheme => _isDarkTheme ? ThemeMode.dark : ThemeMode.light;
 
   void toggleTheme() {
-    _isDarkTheme = !_isDarkTheme;
-    print('theme $_isDarkTheme');
+    // _isDarkTheme = !_isDarkTheme;
+    // print('theme $_isDarkTheme');
+    Shared.setAppThememode(Shared.getCurrthemefromSharedPref()== ThemeMode.dark ? ThemeMode.light :ThemeMode.dark);
     notifyListeners();
   }
 

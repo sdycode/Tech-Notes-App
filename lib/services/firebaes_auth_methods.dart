@@ -3,9 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/src/widgets/framework.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:stick_box/screens/cloudstorescreen.dart';
+import 'package:stick_box/screens/main_screen.dart';
 import 'package:stick_box/utils/snackbar.dart';
 
+import '../utils/shared.dart';
 import 'checkinternetconnect.dart';
 
 class FirebaseAuthClass {
@@ -29,6 +30,7 @@ class FirebaseAuthClass {
         ).signIn();
 
         print(' email ${_currentUser!.email}');
+
         // showSnack(context, _currentUser.email + _currentUser.id);
         final GoogleSignInAuthentication? googleAuth =
             await _currentUser.authentication;
@@ -39,17 +41,21 @@ class FirebaseAuthClass {
               accessToken: googleAuth.accessToken, idToken: googleAuth.idToken);
           UserCredential _userCredential =
               await _auth.signInWithCredential(credential);
-              Navigator.push(
-            context, MaterialPageRoute(builder: (c) => CloudStoreScreen()));
+              Shared.setLoginStatus(true);
+              Navigator.pushReplacement(
+            context, MaterialPageRoute(builder: (c) => MainScreen()));
         }
       }
     } catch (e) {
       print('err $e');
+      if(kDebugMode){
+        // showSnack(context, e.toString());
+      }
       // showSnack(context, e.toString());
       // showLoadingDialog(context, e.toString());
       if (kIsWeb) {
-        Navigator.push(
-            context, MaterialPageRoute(builder: (c) => CloudStoreScreen()));
+        Navigator.pushReplacement(
+            context, MaterialPageRoute(builder: (c) => MainScreen()));
       }
     }
   }

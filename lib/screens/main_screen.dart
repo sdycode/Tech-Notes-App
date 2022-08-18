@@ -8,34 +8,40 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 // import 'package:firebase_messaging/firebase_messaging.dart';
+// import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:stick_box/constants/globals.dart';
 import 'package:stick_box/main.dart';
 import 'package:stick_box/models/notemodel.dart';
+import 'package:stick_box/screens/web_screen.dart';
+import 'package:stick_box/services/data_firebase.dart';
 import 'package:stick_box/utils/provder.dart';
 import 'package:stick_box/utils/snackbar.dart';
 import 'package:stick_box/utils/theme.dart';
+import 'package:stick_box/web/main_web_screen.dart';
 import 'package:stick_box/widgets/app_drawer.dart';
 
 import '../constants/constants.dart';
 import '../constants/sizes.dart';
+import '../services/local_notification_service.dart';
 import '../utils/shared.dart';
 import '../widgets/add_icon.dart';
 
-class CloudStoreScreen extends StatefulWidget {
-  const CloudStoreScreen({Key? key}) : super(key: key);
+class MainScreen extends StatefulWidget {
+  const MainScreen({Key? key}) : super(key: key);
 
   @override
-  State<CloudStoreScreen> createState() => _CloudStoreScreenState();
+  State<MainScreen> createState() => _MainScreenState();
 }
 
-class _CloudStoreScreenState extends State<CloudStoreScreen>
-    with TickerProviderStateMixin {
-  late TabController tabController;
+class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
+  FocusNode _androidFocusNode = FocusNode();
+  late TabController tabController = TabController(length: 3, vsync: this);
   // ScrollController notescrollController =
   //     ScrollController(initialScrollOffset: 0);
   ScrollController maintagsscrollController =
@@ -43,6 +49,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   ScrollController filterScrollController =
       ScrollController(initialScrollOffset: 0);
   Note _editingNote = Note('', '');
+  Map<int, String> _technologiesList = {};
+  Map<int, String> _filteredTechnologiesList = {};
   List<String> bullets = [];
   List<String> filters = [
     'All',
@@ -53,8 +61,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
     'Bullets',
     'Code Title'
   ];
-  // DraggableScrollableController draggableScrollableController =
-  //     DraggableScrollableController();
+
   bool showOnlyMyNotes = false;
   bool isAdmin = false;
   bool isCodeEditing = false;
@@ -70,41 +77,26 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   List<String> subtags = [];
   List<String> codetabbtnnames = [];
   List<String> codes = [];
-  List<String> maintags = [
-    'Flutter',
-    'Dart',
-    'Android',
-    'iOS',
-    'Native',
-    'Other'
-  ];
-  // late CollectionReference<Map<String, dynamic>> noteInstance;
-  // late Stream<QuerySnapshot> notesStream;
-  CollectionReference<Map<String, dynamic>> noteInstance =
-      FirebaseFirestore.instance.collection('notes');
-  Stream<QuerySnapshot> notesStream =
-      FirebaseFirestore.instance.collection('notes').snapshots();
-  List<String> mytags = [];
-  List<String> selectedFilters = ['All'];
-  String data = '';
+  List<String> maintags = [];
   double webMainWFactor = 0.55;
   double webSideWFactor = 0.45;
 
   double webMainW = Sizes().sw * 0.55;
   double webSideW = Sizes().sw * 0.45;
-  late Data pdata;
+
+  List<String> selectedFilters = ['All'];
+  String data = '';
+
+  late Data webData;
+  late Data androidData;
+  late Data _data;
   @override
   void initState() {
     super.initState();
-
+    Data dataNolisten = Provider.of<Data>(context, listen: false);
+    dataNolisten.tabController = TabController(length: 3, vsync: this);
     isAdmin = Shared.isAdmin;
     tabController = TabController(length: 3, vsync: this);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        kIsWeb ? webState(() {}) : androidState(() {});
-      }
-    });
   }
 
   List<Note> noteslist = [];
@@ -116,8 +108,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   TextEditingController titleController = TextEditingController();
   TextEditingController subtagController = TextEditingController();
   TextEditingController searchController = TextEditingController();
+  TextEditingController mainTagsearchController = TextEditingController();
   bool showSheet = false;
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
   StateSetter state = (d) {};
   StateSetter androidState = (d) {};
   StateSetter webState = (d) {};
@@ -125,12 +117,12 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   late ThemeData themeData;
   @override
   Widget build(BuildContext context) {
-    // getAdminStatus();
-    //   kIsWeb ? webState(() {}) : androidState(() {});
-    pdata = Provider.of<Data>(context);
+    Data _data = Provider.of<Data>(context, listen: false);
     myColors = Theme.of(context).extension<MyColors>()!;
     themeData = Theme.of(context);
-    print('build called on ${math.Random().nextInt(5000)}');
+    _data.setMyColors(myColors);
+    _data.setThemeData(themeData);
+    _data.setMainContext(context);
     return WillPopScope(
       onWillPop: () async {
         if (FirebaseAuth.instance.currentUser == null) {
@@ -143,9 +135,12 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
       child: SafeArea(
         child: Scaffold(
           backgroundColor: themeData.backgroundColor,
-          key: _scaffoldKey,
+          key: _data.scaffoldKey,
           drawer: AppDrawer(),
-          body: kIsWeb ? webCode() : androidCode(),
+          body: kIsWeb ? 
+          WebScreen()
+          // webCode()
+           : androidCode(),
           resizeToAvoidBottomInset: false,
         ),
       ),
@@ -176,14 +171,14 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
       subtagsText += t;
     }
     String tagText = '';
-    for (int i = 0; i < mytags.length; i++) {
-      tagText += mytags[i];
+    for (int i = 0; i < maintags.length; i++) {
+      tagText += maintags[i];
 
-      final t = i < mytags.length - 1 ? '__' : '';
+      final t = i < maintags.length - 1 ? '__' : '';
       tagText += t;
     }
     print('tagtext $tagText');
-    final docNote = noteInstance.doc(_editingNote.id);
+    final docNote = DataService().noteInstance.doc(_editingNote.id);
     Note note = Note(titleController.text, noteController.text);
     note.code = code;
     note.tags = tagText;
@@ -230,14 +225,14 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
       subtagsText += t;
     }
     String tagText = '';
-    for (int i = 0; i < mytags.length; i++) {
-      tagText += mytags[i];
+    for (int i = 0; i < maintags.length; i++) {
+      tagText += maintags[i];
 
-      final t = i < mytags.length - 1 ? '__' : '';
+      final t = i < maintags.length - 1 ? '__' : '';
       tagText += t;
     }
     print('tagtext $tagText');
-    final docNote = noteInstance.doc();
+    final docNote = DataService().noteInstance.doc();
     Note note = Note(titleController.text, noteController.text);
     note.code = code;
     note.tags = tagText;
@@ -258,7 +253,10 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   // Future<List<Note>>
   Future<List<Note>> getallServerNotes() async {
     try {
-      await noteInstance.get(GetOptions(source: Source.server)).then(
+      await DataService()
+          .noteInstance
+          .get(GetOptions(source: Source.serverAndCache))
+          .then(
         (value) {
           fullNoteslist.clear();
           QuerySnapshot<Map<String, dynamic>> f = value;
@@ -279,55 +277,41 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
     } catch (e) {
       showSnack(context, 'Error $e');
     }
-
+    await getMainTags();
     return fullNoteslist;
   }
 
   Future<List<Note>> getallCacheNotes() async {
-    if (fullNoteslist.length < 1) {
-      //  noteInstance
-      await noteInstance.get(GetOptions(source: Source.serverAndCache)).then(
-        (value) {
-          fullNoteslist.clear();
-          QuerySnapshot<Map<String, dynamic>> f = value;
-          print('data ${value.docs.length}');
-          print("get firestore insta ${f.docs.first.data()}");
-          // value.docChanges.first.doc.
-          value.docs.forEach((e) {
-            // Timestamp t = e.data()['time'];
-            // DateTime d = t.toDate();
-            print(e.data());
-            Note note = Note.fromJson(e.data());
-            // note.time = d;
-            // print('doc ${d}');
-            fullNoteslist.add(note);
-          });
-        },
-      );
-    } else {
-      await noteInstance.get(GetOptions(source: Source.cache)).then(
-        (value) {
-          fullNoteslist.clear();
-          QuerySnapshot<Map<String, dynamic>> f = value;
-          print('data ${value.docs.length}');
-          print("get firestore insta ${f.docs.first.data()}");
-
-          value.docs.forEach((e) {
-            print(e.data());
-            // Timestamp t = e.data()['time'];
-            // DateTime d = t.toDate();
-            Note note = Note.fromJson(e.data());
-            // note.time = d;
-            // print('doc ${d}');
-            fullNoteslist.add(note);
-          });
-          // print('get akk called in get ${notes}');
-          // setState(() {
-          //   print('notess ${noteslist.length}');
-          // });
-        },
-      );
+    // if (fullNoteslist.length < 1) {
+    //  DataService().noteInstance
+    QuerySnapshot<Map<String, dynamic>>? value;
+    await FirebaseFirestore.instance.disableNetwork();
+    await FirebaseFirestore.instance.enableNetwork();
+    try {
+      value = await DataService()
+          .noteInstance
+          .get(GetOptions(source: Source.serverAndCache));
+    } catch (e) {
+      print('notes err $e');
+      //  notes err [cloud_firestore/unavailable] The service is currently unavailable. This is a most likely a transient condition and may be corrected by retrying with a backoff.
+      showSnackbar('notes err $e');
     }
+    if (value != null) {
+      fullNoteslist.clear();
+
+      print('data ${value.docs.length}');
+      print("get firestore insta ${value.docs.first.data()}");
+
+      value.docs.forEach((e) {
+        print(e.data());
+
+        Note note = Note.fromJson(e.data());
+
+        fullNoteslist.add(note);
+      });
+    }
+
+    await getMainTags();
 
     return fullNoteslist;
   }
@@ -353,12 +337,12 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
 
   Widget addBottomSheetAndroid(BuildContext context) {
     return Container(
-        height: h * 0.8,
+        height: h * 0.9,
         width: w,
         margin: EdgeInsets.all(w * 0.04),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.all(
-            Radius.circular(w * 0.08),
+            Radius.circular(w * 0.04),
           ),
           color: themeData.cardColor,
         ),
@@ -372,10 +356,25 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                   child: Column(
                     children: [
                       Container(
-                        height: w * 0.05,
+                        height: w * 0.01,
                         color: Colors.transparent,
                       ),
-                      tagsRow(),
+                      Container(
+                        width: w,
+                        // height: h*0.05,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.max,
+                          children: [
+                            selectTechButton(),
+                            maintags.isNotEmpty
+                                ? Expanded(child: _mainTagsChipsRow())
+                                : Container(),
+                          ],
+                        ),
+                      ),
+
+                      // tagsRow(),
                       titleWidget(),
                       //  tagWidget(),
                       subtagWidget(),
@@ -385,11 +384,6 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                         height: h * 0.005,
                       ),
                       tabs(),
-
-                      // SizedBox(
-                      //   height: max(MediaQuery.of(context).viewPadding.bottom,
-                      //       MediaQuery.of(context).viewInsets.bottom),
-                      // )
                     ],
                   ),
                 ),
@@ -409,9 +403,6 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
     return kIsWeb
         ? Container(
             width: webSideW * (1 - 0.05),
-            // height: webh * 0.08,
-            // margin: EdgeInsets.all(webSideW * 0.02),
-
             margin:
                 EdgeInsets.only(left: webSideW * 0.02, right: webSideW * 0.02),
             child: Row(
@@ -424,10 +415,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                         webSideW * 0.08 -
                         webSideW * 0.02 -
                         webSideW * 0.05,
-                    //  height: h*0.06,
-
                     child: TextField(
-                  
                       controller: titleController,
                       keyboardType: TextInputType.multiline,
                       maxLines: 4,
@@ -437,9 +425,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                       decoration: InputDecoration(
                           labelStyle: TextStyle(color: myColors.labeltext),
                           labelText: 'Title',
-                          // isCollapsed: false,
                           contentPadding:
-                              // EdgeInsets.zero,
                               EdgeInsets.only(left: webSideW * 0.02),
                           focusedBorder: OutlineInputBorder(
                               borderSide: BorderSide(
@@ -469,15 +455,12 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                   InkWell(
                     onTap: () {},
                     child: Container(
-                        // color: Colors.purple,
                         width: webSideW * 0.08,
                         padding: EdgeInsets.all(webh * 0.005),
                         height: webh * 0.05,
                         child: FittedBox(
                             child: Image.asset(
                           'assets/paste1.png',
-
-                          // color: myColors.pasteicon,
                         ))),
                   ),
                 ]),
@@ -494,8 +477,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     //  height: h*0.06,
 
                     child: TextField(
-                          style:
-                     TextStyle(color:myColors.labeltext),
+                      style: TextStyle(color: myColors.labeltext),
                       controller: titleController,
                       keyboardType: TextInputType.multiline,
                       maxLines: 4,
@@ -613,8 +595,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                 //  height: h*0.06,
 
                 child: TextField(
-                    style:
-                     TextStyle(color:myColors.labeltext),
+                  style: TextStyle(color: myColors.labeltext),
                   controller: subtagController,
                   decoration: InputDecoration(
                       labelText: 'Subtags',
@@ -688,8 +669,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     width: w - w * 0.12 - w * 0.08 - w * 0.06 - w * 0.12,
                     //  height: h*0.06,
 
-                    child: TextField(  style:
-                     TextStyle(color:myColors.labeltext),
+                    child: TextField(
+                      style: TextStyle(color: myColors.labeltext),
                       controller: subtagController,
                       decoration: InputDecoration(
                           labelText: 'Subtags',
@@ -813,12 +794,14 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
       margin: EdgeInsets.all(showSheet ? w * 0.03 : w * 0.07),
       child: InkWell(
         onTap: () {
-          androidState(() {
-            showSheet = !showSheet;
-          });
+          showSheet = !showSheet;
+          androidData.refresh();
+          // androidState(() {
+
+          // });
         },
         child: CircleAvatar(
-          backgroundColor: _isDarkTheme()
+          backgroundColor: isDarkTheme()
               ? Color.fromARGB(255, 220, 98, 77)
               : Color.fromARGB(255, 19, 10, 58),
           child: Icon(
@@ -874,7 +857,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                         padding: EdgeInsets.all(h * 0.005),
                         child: FittedBox(
                           child: Text(
-                            '  Discard  ',
+                            '  Clear  ',
                             style: TextStyle(color: themeData.cardColor),
                           ),
                         ),
@@ -885,7 +868,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     onTap: () async {
                       if (checkTextisValid(titleController.text) &&
                           checkTextisValid(noteController.text) &&
-                          mytags.isNotEmpty) {
+                          maintags.isNotEmpty) {
                         if (isNoteEditing) {
                           await updateNote();
                         } else {
@@ -899,17 +882,17 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                         ScaffoldMessenger.of(context)
                             .showSnackBar(C.getSnackBar(C.noTitlenoNotenoTag));
 
-                        // if (mytags.isEmpty &&
+                        // if (maintags.isEmpty &&
                         //     !checkTextisValid(titleController.text) &&
                         //     !checkTextisValid(noteController.text)) {
                         //   ScaffoldMessenger.of(context)
                         //       .showSnackBar(C.getSnackBar(C.noTag));
-                        // } else if (mytags.isEmpty &&
+                        // } else if (maintags.isEmpty &&
                         //     checkTextisValid(titleController.text) &&
                         //     !checkTextisValid(noteController.text)) {
                         //   ScaffoldMessenger.of(context)
                         //       .showSnackBar(C.getSnackBar(C.noTitlenoTag));
-                        // } else if (mytags.isEmpty &&
+                        // } else if (maintags.isEmpty &&
                         //     !checkTextisValid(titleController.text) &&
                         //     checkTextisValid(noteController.text)) {
                         //   ScaffoldMessenger.of(context)
@@ -997,6 +980,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     androidState(() {
                       showSheet = false;
                       isNoteEditing = false;
+                      _androidFocusNode.nextFocus();
                     });
                   },
                   child: Container(
@@ -1018,7 +1002,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                       child: FittedBox(
                         child: Text(
                           '  Discard  ',
-                          style: TextStyle(color: myColors.normaltext),
+                          style: TextStyle(color: Colors.white),
                         ),
                       ),
                     ),
@@ -1028,7 +1012,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                   onTap: () {
                     if (checkTextisValid(titleController.text) &&
                         checkTextisValid(noteController.text) &&
-                        mytags.isNotEmpty) {
+                        maintags.isNotEmpty) {
                       if (isNoteEditing) {
                         updateNote();
                       } else {
@@ -1076,18 +1060,18 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   }
 
   Widget mainTag(int i) {
-    bool isTagMarked = mytags.contains(maintags[i]);
-    // if(mytags.contains(maintags[i])){}
+    bool isTagMarked = maintags.contains(maintags[i]);
+    // if(maintags.contains(maintags[i])){}
     return kIsWeb
         ? Transform.scale(
             scale: isTagMarked ? 1.05 : 1,
             child: InkWell(
               onTap: () {
                 webState(() {
-                  if (!mytags.contains(maintags[i])) {
-                    mytags.add(maintags[i]);
+                  if (!maintags.contains(maintags[i])) {
+                    maintags.add(maintags[i]);
                   } else {
-                    mytags.remove(maintags[i]);
+                    maintags.remove(maintags[i]);
                   }
                 });
               },
@@ -1157,10 +1141,10 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                 child: InkWell(
                   onTap: () {
                     androidState(() {
-                      if (!mytags.contains(maintags[i])) {
-                        mytags.add(maintags[i]);
+                      if (!maintags.contains(maintags[i])) {
+                        maintags.add(maintags[i]);
                       } else {
-                        mytags.remove(maintags[i]);
+                        maintags.remove(maintags[i]);
                       }
                     });
                   },
@@ -1211,40 +1195,25 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                 ),
               ),
             )
-            // IconButton(onPressed: (){},
-            // iconSize: h*0.02,
-            //  icon: Icon(Icons.close_rounded))
           ],
         ));
   }
 
   Future getMainTags() async {
-    FirebaseFirestore.instance
+    await FirebaseFirestore.instance
         .collection('maintag')
         .get(GetOptions(source: Source.serverAndCache))
         .then(
       (value) {
-        maintags.clear();
+        _technologiesList.clear();
         QuerySnapshot<Map<String, dynamic>> f = value;
-        print('data ${value.docs.length}');
-        print("get firestore insta ${f.docs.first.data()}");
-        value.docs.forEach((e) {
-          // Timestamp t = e.data()['time'];
-          // DateTime d = t.toDate();
-          // Note note = Note.fromJson(e.data());
-          // note.time = d;
-          // print('doc ${d}');
-          maintags.add(e['maintag']);
-        });
-        // print('get akk called in get ${notes}');
-        // setState(() {
-        //   print('notess ${noteslist.length}');
-        // });
 
-        print('maintagss $maintags');
-        Future.delayed(Duration(seconds: 3)).then((value) {
-          androidState(() {});
+        int _count = 0;
+        value.docs.forEach((e) {
+          _technologiesList[_count] = (e['maintag']);
+          _count++;
         });
+        _filteredTechnologiesList = Map.from(_technologiesList);
       },
     );
   }
@@ -1253,20 +1222,12 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
     return Container(
       height: subtags.isEmpty ? h * 0.58 : h * 0.54,
       width: w,
-      // color: Colors.blue,
       child: TabBarView(controller: tabController, children: [
         noteTab(),
         bulletTab(),
         codeTab(),
       ]),
     );
-    // switch (tabIndex) {
-    //   case 0:
-    //     return noteTab();
-
-    //   default:
-    //     noteTab();
-    // }
   }
 
   Widget noteTab() {
@@ -1280,8 +1241,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             Scrollbar(
               // controller: notescrollController,
               // isAlwaysShown: true,
-              child: TextField(  style:
-                     TextStyle(color:myColors.labeltext),
+              child: TextField(
+                style: TextStyle(color: myColors.labeltext),
                 controller: noteController,
                 keyboardType: TextInputType.multiline,
                 maxLines: subtags.isEmpty
@@ -1387,8 +1348,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
         child: Column(
           children: [
             TextField(
-                style:
-                     TextStyle(color:myColors.labeltext),
+              style: TextStyle(color: myColors.labeltext),
               controller: bulletController,
               keyboardType: TextInputType.multiline,
               maxLines: 3,
@@ -1451,7 +1411,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                               bulletController.clear();
                             }
 
-                            kIsWeb ? webState(() {}) : androidState(() {});
+                            updateState();
                           },
                           icon: Icon(
                             Icons.add_card,
@@ -1584,10 +1544,11 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   }
 
   Widget tabRow() {
+    double _textSize = kIsWeb ? webSideW * 0.035 : w * 0.035;
     print('tabController ${tabController.index}');
-    tabController.addListener(() {
-      webState(() {});
-    });
+    // tabController.addListener(() {
+    //   webState(() {});
+    // });
     return Container(
         height: h * 0.05,
         width: w,
@@ -1610,6 +1571,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                   Text(
                     'Note',
                     style: TextStyle(
+                      fontSize: _textSize,
                       color: tabController.index == 0
                           ? myColors.tabiconactive
                           : myColors.tabiconInctive,
@@ -1634,6 +1596,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                   Text(
                     'Bullets',
                     style: TextStyle(
+                      fontSize: _textSize,
                       color: tabController.index == 1
                           ? myColors.tabiconactive
                           : myColors.tabiconInctive,
@@ -1658,7 +1621,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                   Text(
                     'Code',
                     style: TextStyle(
-                      // fontWeight: FontWeight.w600,
+                      fontSize: _textSize,
                       color: tabController.index == 2
                           ? myColors.tabiconactive
                           : myColors.tabiconInctive,
@@ -1668,18 +1631,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
               )),
             ],
           ),
-        )
-        // child: Row(
-        //   mainAxisAlignment: MainAxisAlignment.spaceAround,
-        //   children: [
-        //     Tab(
-        //       text: 'Note',
-        //       icon: Icon(Icons.notes),
-        //     ),
-
-        //   ],
-        // ),
-        );
+        ));
   }
 
   webCode() {
@@ -1702,16 +1654,10 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             return StatefulBuilder(
                 builder: (BuildContext context, StateSetter wtState) {
               webState = wtState;
+              webData = Provider.of<Data>(context);
               print(
                   'isadmin $isAdmin  webState  called  ${math.Random().nextInt(5000)}');
 
-              // codetabindex = codetabindex >= codetabbtnnames.length
-              //     ? codetabbtnnames.length - 1
-              //     : codetabindex;
-
-              // if (isCodeEditing) {
-              //   codetabindex = editCodeIndex;
-              // }
               return Container(
                 width: webw,
                 height: webh,
@@ -1806,7 +1752,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
           color: Color.fromARGB(255, 226, 238, 152),
           borderRadius: BorderRadius.circular(webh * 0.02)),
       child: Padding(
-          padding: EdgeInsets.all(webh * 0.001*0),
+          padding: EdgeInsets.all(webh * 0.001 * 0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             mainAxisSize: MainAxisSize.max,
@@ -1816,30 +1762,42 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                   padding: EdgeInsets.only(left: webSideW * 0.03),
                   child: Text(
                     bullets[i],
-                    style: TextStyle(
-                        fontSize: webh * 0.02, color: Colors.black),
+                    style:
+                        TextStyle(fontSize: webh * 0.02, color: Colors.black),
                   ),
                 ),
               ),
               IconButton(
-                  iconSize: webh * 0.022,
+                  iconSize: h * 0.022,
                   onPressed: () {
-                    kIsWeb
-                        ? webState(() {
-                            bullets.removeAt(i);
-                          })
-                        : androidState(() {
-                            bullets.removeAt(i);
-                          });
+                    showBulletEditdialog(i);
+
+                    // kIsWeb
+                    //     ? webState(() {
+                    //         bullets.removeAt(i);
+                    //       })
+                    //     : androidState(() {
+                    //         bullets.removeAt(i);
+                    //       });
+                  },
+                  icon: Icon(
+                    Icons.edit,
+                    color: chipDarkBlueColor,
+                    size: h * 0.022,
+                  )),
+              IconButton(
+                  iconSize: h * 0.022,
+                  onPressed: () {
+                    bullets.removeAt(i);
+                    updateState();
                   },
                   icon: Icon(
                     Icons.delete,
                     color: Colors.red,
-                     size: webh * 0.022,
+                    size: h * 0.022,
                   ))
             ],
-          )
-          ),
+          )),
     );
   }
 
@@ -1850,10 +1808,20 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
           height: kIsWeb ? h * 0.01 : h * 0.03,
           color: Colors.transparent,
         ),
-
-        tagsRow(),
+        Container(
+          width: w,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              selectTechButton(),
+              maintags.isNotEmpty
+                  ? Expanded(child: _mainTagsChipsRow())
+                  : Container(),
+            ],
+          ),
+        ),
         titleWidget(),
-        //  tagWidget(),
         subtagWidget(),
         subtagsRow(),
         tabRow(),
@@ -1861,11 +1829,6 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
           height: h * 0.005,
         ),
         tabs(),
-
-        // SizedBox(
-        //   height: max(MediaQuery.of(context).viewPadding.bottom,
-        //       MediaQuery.of(context).viewInsets.bottom),
-        // )
       ],
     );
   }
@@ -1913,14 +1876,19 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                             });
                     },
                     child: FittedBox(
-                      child:
-                          i < 0 ? Text('New Code', 
-                          style: TextStyle(
-                            color:Colors.brown, fontWeight: FontWeight.w600
-                          ),
-                          ) : Text(codetabbtnnames[i],   style: TextStyle(
-                              color:Colors.brown, fontWeight: FontWeight.w600
-                          ),),
+                      child: i < 0
+                          ? Text(
+                              'New Code',
+                              style: TextStyle(
+                                  color: Colors.brown,
+                                  fontWeight: FontWeight.w600),
+                            )
+                          : Text(
+                              codetabbtnnames[i],
+                              style: TextStyle(
+                                  color: Colors.brown,
+                                  fontWeight: FontWeight.w600),
+                            ),
                     ),
                   )),
             ),
@@ -1966,12 +1934,19 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                             });
                     },
                     child: FittedBox(
-                      child:
-                          i < 0 ? Text('New Code',  style: TextStyle(
-                            color:Colors.brown, fontWeight: FontWeight.w600
-                          ),) : Text(codetabbtnnames[i],  style: TextStyle(
-                             color:Colors.brown, fontWeight: FontWeight.w600
-                          ),),
+                      child: i < 0
+                          ? Text(
+                              'New Code',
+                              style: TextStyle(
+                                  color: Colors.brown,
+                                  fontWeight: FontWeight.w600),
+                            )
+                          : Text(
+                              codetabbtnnames[i],
+                              style: TextStyle(
+                                  color: Colors.brown,
+                                  fontWeight: FontWeight.w600),
+                            ),
                     ),
                   )),
             ),
@@ -2020,13 +1995,13 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                                     codetabindex = -1;
                                   })
                                 : androidState(() {
-                                   isCodeEditing = true;
+                                    isCodeEditing = true;
                                     codeTitleController.text =
                                         codetabbtnnames[cdindex];
                                     codeController.text = codes[cdindex];
                                     editCodeIndex = cdindex;
                                     codetabindex = -1;
-                                });
+                                  });
                           },
                           icon: Icon(
                             Icons.edit,
@@ -2088,8 +2063,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
               //     ? webSideW - webh * 0.05 - webSideW * 0.12
               //     : w - webh * 0.05 - webSideW * 0.12,
               child: TextField(
-                  style:
-                     TextStyle(color:myColors.labeltext),
+                style: TextStyle(color: myColors.labeltext),
                 controller: codeTitleController,
                 keyboardType: TextInputType.text,
                 maxLines: 1,
@@ -2195,8 +2169,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             height: webh * 0.45,
             width: webSideW,
             margin: EdgeInsets.all(webSideW * 0.01),
-            child: TextField(  style:
-                     TextStyle(color:myColors.labeltext),
+            child: TextField(
+              style: TextStyle(color: myColors.labeltext),
               controller: codeController,
               keyboardType: TextInputType.multiline,
               maxLines: 26,
@@ -2232,8 +2206,8 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             height: h * 0.45,
             width: w,
             margin: EdgeInsets.all(w * 0.01),
-            child: TextField(  style:
-                     TextStyle(color:myColors.labeltext),
+            child: TextField(
+              style: TextStyle(color: myColors.labeltext),
               controller: codeController,
               keyboardType: TextInputType.multiline,
               maxLines: 26,
@@ -2282,7 +2256,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
               iconSize: math.min(tileW * 0.06, webh * 0.04),
               padding: EdgeInsets.zero,
               onPressed: () async {
-                _scaffoldKey.currentState!.openDrawer();
+                _data.scaffoldKey.currentState!.openDrawer();
                 // customTheme.toggleTheme();
               },
               icon: Icon(
@@ -2292,64 +2266,64 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
           Container(
             width: tileW * 0.83,
             child: TextField(
-                style: TextStyle(
-                    fontSize: webh * 0.022,
-                    //  height: 1.0,
-                    color: myColors.labeltext),
-                controller: searchController,
-                cursorColor: myColors.normaltext!,
-                onSubmitted: (d) {
-                  getSearchResult();
-                },
-                decoration: InputDecoration(
-                  labelText: "Search any topic",
-                  // ${noteslist.length}
-                  labelStyle: TextStyle(color: myColors.normaltext!),
-                  // join,
-                  // '${webw.round()} / ${webMainW.round()}  / ${webSideW.round()}',
-                  contentPadding: EdgeInsets.only(left: webMainW * 0.015),
+              style: TextStyle(
+                  fontSize: webh * 0.022,
+                  //  height: 1.0,
+                  color: myColors.labeltext),
+              controller: searchController,
+              cursorColor: myColors.normaltext!,
+              onSubmitted: (d) {
+                getSearchResult();
+              },
+              decoration: InputDecoration(
+                labelText: "Search any topic",
+                // ${noteslist.length}
+                labelStyle: TextStyle(color: myColors.normaltext!),
+                // join,
+                // '${webw.round()} / ${webMainW.round()}  / ${webSideW.round()}',
+                contentPadding: EdgeInsets.only(left: webMainW * 0.015),
 
-                  focusedBorder: OutlineInputBorder(
-                      borderSide:
-                          BorderSide(width: 1, color: myColors.normaltext!),
-                      borderRadius: BorderRadius.circular(h * 0.02)),
-                  enabledBorder: OutlineInputBorder(
-                      borderSide:
-                          BorderSide(width: 1, color: myColors.normaltext!),
-                      borderRadius: BorderRadius.circular(h * 0.02)),
-                  // prefixIcon: InkWell(
-                  //     onTap: () {},
-                  //     child: Icon(
-                  //       Icons.search,
-                  //       size: webh * 0.02,
-                  //       color: Colors.grey,
-                  //     )),
+                focusedBorder: OutlineInputBorder(
+                    borderSide:
+                        BorderSide(width: 1, color: myColors.normaltext!),
+                    borderRadius: BorderRadius.circular(h * 0.02)),
+                enabledBorder: OutlineInputBorder(
+                    borderSide:
+                        BorderSide(width: 1, color: myColors.normaltext!),
+                    borderRadius: BorderRadius.circular(h * 0.02)),
+                // prefixIcon: InkWell(
+                //     onTap: () {},
+                //     child: Icon(
+                //       Icons.search,
+                //       size: webh * 0.02,
+                //       color: Colors.grey,
+                //     )),
 
-                  suffixIcon: IconButton(
-                    padding: EdgeInsets.zero,
-                    iconSize: webh * 0.02,
-                    onPressed: () {
-                      webState(() {
-                        searchController.clear();
-                        getSearchResult();
-                      });
-                    },
-                    icon: FittedBox(
-                      child: closeIcon(),
-                    ),
+                suffixIcon: IconButton(
+                  padding: EdgeInsets.zero,
+                  iconSize: webh * 0.02,
+                  onPressed: () {
+                    webState(() {
+                      searchController.clear();
+                      getSearchResult();
+                    });
+                  },
+                  icon: FittedBox(
+                    child: closeIcon(),
                   ),
-                  // InkWell(
-                  //     onTap: () {
-                  //       webState(() {
-                  //         searchController.clear();
-                  //       });
-                  //     },
-                  //     child: Icon(
-                  //       Icons.close,
-                  //       size: webh * 0.02,
-                  //     )),
                 ),
+                // InkWell(
+                //     onTap: () {
+                //       webState(() {
+                //         searchController.clear();
+                //       });
+                //     },
+                //     child: Icon(
+                //       Icons.close,
+                //       size: webh * 0.02,
+                //     )),
               ),
+            ),
           ),
           IconButton(
               iconSize: math.min(tileW * 0.06, webh * 0.04),
@@ -2398,57 +2372,58 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
       child: Container(
         width: tileW - h * 0.06,
         child: TextField(
-           style: TextStyle(
-                fontSize: h * 0.022,
-                //  height: 1.0,
-                color:myColors.labeltext),
-            controller: searchController,
-            cursorColor: myColors.normaltext,
-            onChanged: (d) {
-              getSearchResult();
-            },
-            decoration: InputDecoration(
-              labelText: "Search any topic",
-              // ${noteslist.length}
-              labelStyle: TextStyle(color: myColors.normaltext),
-              // join,
-              // '${webw.round()} / ${webMainW.round()}  / ${webSideW.round()}',
-              contentPadding: EdgeInsets.only(left: w * 0.05),
+          focusNode: _androidFocusNode,
+          style: TextStyle(
+              fontSize: h * 0.022,
+              //  height: 1.0,
+              color: myColors.labeltext),
+          controller: searchController,
+          cursorColor: myColors.normaltext,
+          onChanged: (d) {
+            getSearchResult();
+          },
+          decoration: InputDecoration(
+            labelText: "Search any topic",
+            // ${noteslist.length}
+            labelStyle: TextStyle(color: myColors.normaltext),
+            // join,
+            // '${webw.round()} / ${webMainW.round()}  / ${webSideW.round()}',
+            contentPadding: EdgeInsets.only(left: w * 0.05),
 
-              focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(
-                      width: 1, color: C.titleColor.withOpacity(0.3)),
-                  borderRadius: BorderRadius.circular(h * 0.02)),
-              enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(
-                      width: 1, color: C.titleColor.withOpacity(0.3)),
-                  borderRadius: BorderRadius.circular(h * 0.02)),
+            focusedBorder: OutlineInputBorder(
+                borderSide:
+                    BorderSide(width: 1, color: C.titleColor.withOpacity(0.3)),
+                borderRadius: BorderRadius.circular(h * 0.02)),
+            enabledBorder: OutlineInputBorder(
+                borderSide:
+                    BorderSide(width: 1, color: C.titleColor.withOpacity(0.3)),
+                borderRadius: BorderRadius.circular(h * 0.02)),
 
-              suffixIcon: IconButton(
-                padding: EdgeInsets.zero,
-                iconSize: h * 0.02,
-                onPressed: () {
-                  androidState(() {
-                    searchController.clear();
-                    getSearchResult();
-                  });
-                },
-                icon: FittedBox(
-                  child: closeIcon(),
-                ),
+            suffixIcon: IconButton(
+              padding: EdgeInsets.zero,
+              iconSize: h * 0.02,
+              onPressed: () {
+                androidState(() {
+                  searchController.clear();
+                  getSearchResult();
+                });
+              },
+              icon: FittedBox(
+                child: closeIcon(),
               ),
-              // InkWell(
-              //     onTap: () {
-              //       webState(() {
-              //         searchController.clear();
-              //       });
-              //     },
-              //     child: Icon(
-              //       Icons.close,
-              //       size: h * 0.02,
-              //     )),
             ),
+            // InkWell(
+            //     onTap: () {
+            //       webState(() {
+            //         searchController.clear();
+            //       });
+            //     },
+            //     child: Icon(
+            //       Icons.close,
+            //       size: h * 0.02,
+            //     )),
           ),
+        ),
       ),
     );
   }
@@ -2456,7 +2431,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   searchfiltersAndroid() {
     Color _darkColor = Color.fromARGB(255, 11, 5, 57);
     Color _lightColor = Color.fromARGB(255, 204, 220, 240);
-    print('isdark ${_isDarkTheme()}');
+    print('isdark ${isDarkTheme()}');
     return Container(
       height: h * 0.05,
       width: w,
@@ -2468,11 +2443,11 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             child: ElevatedButton(
                 style: ButtonStyle(
                     backgroundColor: MaterialStateProperty.all<Color>(
-                        _isDarkTheme()
+                        isDarkTheme()
                             ? (showOnlyMyNotes ? _lightColor : _darkColor)
                             : (showOnlyMyNotes ? _darkColor : _lightColor)),
                     foregroundColor: MaterialStateProperty.all<Color>(
-                        _isDarkTheme()
+                        isDarkTheme()
                             ? (showOnlyMyNotes ? _darkColor : _lightColor)
                             : (showOnlyMyNotes ? _lightColor : _darkColor)),
                     shape: MaterialStateProperty.all<RoundedRectangleBorder>(
@@ -2483,8 +2458,14 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                 onPressed: () {
                   androidState(
                     () {
-                      showOnlyMyNotes = !showOnlyMyNotes;
-                      getSearchResult();
+                      if (!Shared.isLogin() ||
+                          FirebaseAuth.instance.currentUser == null) {
+                        showSnackbar(
+                            'Please sign in with google to create personal notes ${!Shared.isLogin()}');
+                      } else {
+                        showOnlyMyNotes = !showOnlyMyNotes;
+                        getSearchResult();
+                      }
                     },
                   );
                 },
@@ -2525,7 +2506,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
           if (filters[i] == 'All') {
             selectedFilters.clear();
             selectedFilters.add(filters[i]);
-            // noteslist = List.from(fullNoteslist);
+
             getSearchResult();
             // if ( !kIsWeb) {
             //   modifyNotesListToShowOnlyUserNotes();
@@ -2542,7 +2523,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
 
               selectedFilters.add('All');
             }
-             getSearchResult();
+            getSearchResult();
           }
 
           webState(() {});
@@ -2667,7 +2648,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   // }
 
   notesListWidget() {
-    print('notess ${noteslist.length}');
+    // print('notess ${noteslist.length}');
     return Expanded(
         child: ListView.builder(
             itemCount: noteslist.length,
@@ -2719,7 +2700,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
               noteslist[i].title,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: webh * 0.035,
+                fontSize: webh * 0.028,
               ),
             ),
           ),
@@ -2761,7 +2742,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
 
                           subtitlesubtags))),
                   // Spacer(),
-                  isAdmin || showOnlyMyNotes
+                  (isAdmin || showOnlyMyNotes)
                       ? IconButton(
                           padding: EdgeInsets.zero,
                           iconSize: tileW * 0.04,
@@ -2800,7 +2781,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             ),
             Row(
               children: [
-                tilesubpartheading('note', indent),
+                _tilesubpartheading('Note', indent),
                 Expanded(
                   child: Text(
                     noteslist[i].note,
@@ -2821,7 +2802,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
               width: tileW,
               child: Row(
                 children: [
-                  tilesubpartheading('bullets', indent),
+                  _tilesubpartheading('Bullets', indent),
                   Expanded(
                       child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2852,7 +2833,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             ),
             Row(
               children: [
-                tilesubpartheading('code', indent),
+                _tilesubpartheading('Code', indent),
                 Container(
                     width: tileW * 0.98 - indent,
                     height: webh * 0.3,
@@ -2920,7 +2901,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                 child: Text(
                   ' -  ' + noteslist[i].author.split('@').first,
                   style: TextStyle(
-                      color: _isDarkTheme()
+                      color: isDarkTheme()
                           ? Color.fromARGB(255, 149, 232, 233)
                           : Color.fromARGB(255, 4, 38, 159),
                       fontWeight: FontWeight.w400),
@@ -2946,7 +2927,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
     return b;
   }
 
-  Widget tilesubpartheading(String s, double d) {
+  Widget _tilesubpartheading(String s, double d) {
     return Container(
       width: d,
       child: Text(
@@ -2982,7 +2963,10 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             InkWell(
               onTap: () async {
                 // await getDatatoJsonAndShareJsonFile();
-                _scaffoldKey.currentState!.openDrawer();
+                _androidFocusNode.nextFocus();
+                _data.scaffoldKey.currentState!.openDrawer();
+
+                // addNewMainTags();
               },
               child: Padding(
                 padding: EdgeInsets.all(h * 0.01),
@@ -2995,6 +2979,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             InkWell(
               onTap: () {
                 getSearchResult();
+                _androidFocusNode.nextFocus();
               },
               child: Padding(
                 padding: EdgeInsets.all(h * 0.01),
@@ -3019,8 +3004,9 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
             print('snap list ${noteslist.length}');
 
             return StatefulBuilder(
-                builder: (BuildContext context, StateSetter sState) {
-              androidState = sState;
+                builder: (BuildContext context, StateSetter android_State) {
+              androidData = Provider.of<Data>(context);
+              androidState = android_State;
               if (showOnlyMyNotes) {
                 modifyNotesListToShowOnlyUserNotes();
               }
@@ -3032,13 +3018,9 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     Column(
                       mainAxisSize: MainAxisSize.max,
                       children: [
-                        // Text('dataddd'),
-
                         if (!showSheet) searchfiltersAndroid(),
                         if (!showSheet)
                           Expanded(
-                            // height: h * 0.5,
-
                             child: noteslist.isNotEmpty
                                 ? ListView.builder(
                                     itemCount: noteslist.length,
@@ -3055,7 +3037,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                                         'You dont have any notes !!!\n Please click on add button to add note',
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
-                                            color: _isDarkTheme()
+                                            color: isDarkTheme()
                                                 ? Color.fromARGB(
                                                     255, 215, 227, 233)
                                                 : Color.fromARGB(
@@ -3071,14 +3053,6 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     Align(
                         alignment: Alignment.bottomRight,
                         child: Container(
-                            // margin: EdgeInsets.only(
-                            //     bottom: max(
-                            //         MediaQuery.of(context)
-                            //             .viewPadding
-                            //             .bottom,
-                            //         MediaQuery.of(context)
-                            //             .viewInsets
-                            //             .bottom)),
                             child: showSheet
                                 ? addBottomSheetAndroid(context)
                                 : floatingButton()))
@@ -3111,15 +3085,6 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   }
 
   void getSearchResult() {
-    //     List<String> filters = [
-    //   'All',
-    //   'Technology',
-    //   'Title',
-    //   'Tag',
-    //   'Notes',
-    //   'Bullets',
-    //   'Code Title'
-    // ];
     if (selectedFilters.contains('All') && selectedFilters.length == 1) {
       noteslist = List.from(fullNoteslist);
       if (searchController.text.isNotEmpty) {
@@ -3150,19 +3115,9 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
       return;
     }
     noteslist.clear();
-    // if (!showOnlyMyNotes) if (searchController.text.isEmpty) {
-    //   showSnackbar('Please enter the topic to search');
-    //   androidState(() {});
-    //   return;
-    // }
 
-    // print('iffff ${selectedFilters} && ${noteslist.length}');
-    // print(
-    //     'tagggs beforeeeeeeeeeeeeee ${noteslist.length} and ${fullNoteslist.length}');
-    bool isAdded = false;
     for (Note e in fullNoteslist) {
       print('noteis ${e.tags.toString()}');
-      isAdded = false;
 
       if (showOnlyMyNotes) {
         if (e.author != getCurrentUserEmailId()) {
@@ -3173,7 +3128,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
         print('iff techno');
         if (checkIsThisTextContains(e.tags.toLowerCase())) {
           noteslist.add(e);
-          isAdded = true;
+
           continue;
         }
       }
@@ -3182,7 +3137,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
         print('iff title');
         if (checkIsThisTextContains(e.title.toLowerCase())) {
           noteslist.add(e);
-          isAdded = true;
+
           continue;
         }
 
@@ -3197,35 +3152,35 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
         print('iff Notes');
         if (checkIsThisTextContains(e.note.toLowerCase())) {
           noteslist.add(e);
-          isAdded = true;
+
           continue;
         }
       }
       if (selectedFilters.contains('Code Title')) {
         String codetitle = e.code;
-        print('iff codet tile ${e.code}');
+        // print('iff codet tile ${e.code}');
         if (checkIsThisTextContains(e.code.toLowerCase())) {
           noteslist.add(e);
-          isAdded = true;
+
           continue;
         }
       }
 
       if (selectedFilters.contains('Bullets')) {
-        print('iff bullets');
+        // print('iff bullets');
         if (checkIsThisTextContains(e.bullets.toLowerCase())) {
           noteslist.add(e);
-          isAdded = true;
+
           continue;
         }
 
         // print('tagggs ${e.tags}');
       }
-      print('iff Tag');
+      // print('iff Tag');
       if (selectedFilters.contains('Tag')) {
         if (checkIsThisTextContains(e.subtags.toLowerCase())) {
           noteslist.add(e);
-          isAdded = true;
+
           continue;
         }
       }
@@ -3242,7 +3197,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
     loadSubbtags();
     loadMainNote();
     loadBulltes();
-    // loadCodes();
+
     androidState(
       () {},
     );
@@ -3252,9 +3207,9 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
   }
 
   void loadMainTags() {
-    mytags.clear();
+    maintags.clear();
     List l = _editingNote.tags.split(commonSeparator);
-    mytags = List.from(l);
+    maintags = List.from(l);
   }
 
   void loadTitle() {
@@ -3298,9 +3253,7 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
     return false;
   }
 
-  _isDarkTheme() {
-    return CustomTheme().currentTheme == ThemeMode.dark;
-  }
+  
 
   askToDelete(int i) async {
     await showDialog(
@@ -3328,11 +3281,11 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
                     style: TextStyle(color: Colors.red),
                   ),
                   onPressed: () async {
-                    print('note deleted');
-                    noteInstance.doc(noteslist[i].id).delete();
+                    // print('note deleted');
+                    DataService().noteInstance.doc(noteslist[i].id).delete();
                     noteslist.removeAt(i);
                     Navigator.pop(context);
-                    pdata.refresh();
+                    _data.refresh();
                   },
                 ),
                 TextButton(
@@ -3360,10 +3313,375 @@ class _CloudStoreScreenState extends State<CloudStoreScreen>
       webState(
         () {},
       );
+      webData.refresh();
     } else {
       androidState(
         () {},
       );
+      androidData.refresh();
     }
+  }
+
+  void addNewMainTags() {
+    String fulls = '''Aasaan
+,Advanced Java Course
+,Amazon_web_services
+,Android Development Course
+,Appointment Booking
+,Automation Testing Course
+,AWS Cloud Training & Certification
+,Azure
+,Big Data
+,Blockchain
+,Blog
+,Blog
+,Business Excel Course
+,C,C++
+,C++ Institute
+,CakePHP
+,Campus Services
+,Career
+,Careers
+,Cart
+,CCIE
+,CCNA
+,CCNA Collaboration
+,CCNA Data Center
+,CCNA Routing and Switching
+,CCNA Security
+,CCNA Voice
+,CCNA Wireless
+,CCNP
+,CCNP Data Center
+,CCNP Main
+,CCNP Routing and Switching
+,CCNP Security
+,CCNP Troubleshooting
+,CCNP Wireless
+,Certiport
+,CertNexus
+,CertNexus Certification
+,CHD
+,CHD Webinar
+,Checkout
+,Cisco''';
+    // List<String> fsl = fulls.split(',');
+    // _technologiesList = fsl;
+    // Future.forEach(fsl, (e) async {
+    //   final docNote = mainTagsInstance.doc();
+    //   await docNote.set({'maintag': e.toString().trim()});
+    // });
+  }
+
+  selectTechButton() {
+    return Padding(
+      padding: EdgeInsets.all(h * 0.01),
+      child: RawChip(
+        label: Text(
+          // Shared.isDarkTheme().toString() +
+          //     '  ${Shared.getCurrthemefromSharedPref().toString()}  '
+          'Select Technology',
+          style: TextStyle(color: chipLightBlueColor),
+        ),
+        backgroundColor: chipDarkBlueColor,
+        onPressed: () {
+          showDialog(
+              barrierDismissible: false,
+              context: context,
+              builder: (context) => technologiesChipsDialog());
+        },
+      ),
+    );
+  }
+
+  void _modifyFilteredMaintagList(String text) {
+    if (text.trim() == '') {
+      print('tagg empyt called');
+      _filteredTechnologiesList = Map.from(_technologiesList);
+      return;
+    }
+    _filteredTechnologiesList.clear();
+    _technologiesList.forEach((k, v) {
+      List _tags = v.trim().split(' ');
+
+      _tags.forEach((e) {
+        print(
+            'tagg in $e ${_filteredTechnologiesList.length} ${text.toString().toLowerCase()} --  ${e.toString().toLowerCase()}');
+        if (e
+            .toString()
+            .toLowerCase()
+            .contains(text.toString().toLowerCase())) {
+          _filteredTechnologiesList[k] = v;
+        }
+      });
+    });
+  }
+
+  technologiesChipsDialog() {
+    return Dialog(
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(h * 0.015)),
+      child: StatefulBuilder(
+        builder: (BuildContext context, StateSetter dialogState) {
+          bool _isKeybordOpen =
+              WidgetsBinding.instance.window.viewInsets.bottom > 0.0
+                  ? true
+                  : false;
+
+          return Container(
+            height: h * 0.8,
+            width: w,
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: TextField(
+                          controller: mainTagsearchController,
+                          cursorColor: chipDarkBlueColor,
+                          style: TextStyle(color: chipDarkBlueColor),
+                          onChanged: (d) {
+                            dialogState(
+                              () {
+                                _modifyFilteredMaintagList(d);
+                              },
+                            );
+                          },
+                          decoration: InputDecoration(
+                              contentPadding: EdgeInsets.all(8),
+                              labelStyle: TextStyle(
+                                  decorationColor: myColors.textfieldborder ??
+                                      themeData.primaryColor),
+                              focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                      width: 1,
+                                      color: myColors.textfieldborder ??
+                                          themeData.primaryColor),
+                                  borderRadius:
+                                      BorderRadius.circular(h * 0.02)),
+                              enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                      width: 1,
+                                      color: myColors.textfieldborder ??
+                                          themeData.primaryColor),
+                                  borderRadius:
+                                      BorderRadius.circular(h * 0.02)),
+                              suffixIcon: IconButton(
+                                  onPressed: () {
+                                    dialogState(() {
+                                      mainTagsearchController.clear();
+                                      _modifyFilteredMaintagList('');
+                                    });
+                                  },
+                                  icon: Icon(
+                                    Icons.close,
+                                    color: Colors.red,
+                                  ))),
+                        ),
+                      ),
+                    ),
+                    RawMaterialButton(
+                      constraints: BoxConstraints(),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        updateState();
+                      },
+                      elevation: 2.0,
+                      fillColor: Colors.grey.shade200,
+                      child: Icon(
+                        Icons.close,
+                        size: 16.0,
+                      ),
+                      padding: EdgeInsets.all(6.0),
+                      shape: CircleBorder(),
+                    )
+                  ],
+                ),
+                Expanded(
+                  child: Container(
+                    padding: EdgeInsets.all(10),
+                    width: double.infinity,
+                    child: SingleChildScrollView(
+                      child: Wrap(
+                        direction: Axis.horizontal,
+                        children: [
+                          ..._filteredTechnologiesList.entries.map((e) {
+                            // int i = _technologiesList.indexOf(e);
+                            int i = e.key;
+                            double _sidePadding =
+                                kIsWeb ? webSideW * 0.015 : w * 0.015;
+                            bool _isSelected =
+                                maintags.contains(e.value.trim());
+                            return Container(
+                              margin: EdgeInsets.fromLTRB(_sidePadding,
+                                  _sidePadding, _sidePadding, _sidePadding),
+                              child: RawChip(
+                                  showCheckmark: false,
+                                  selected: _isSelected,
+                                  selectedColor: chipDarkBlueColor,
+                                  backgroundColor: chipLightBlueColor,
+                                  onPressed: () {
+                                    if (maintags.contains(e.value.trim())) {
+                                      maintags.remove(e.value.trim());
+                                    } else {
+                                      maintags.add(e.value.trim());
+                                    }
+                                    dialogState(() {});
+                                  },
+                                  // onSelected: (d) {
+                                  //   dialogState(() {
+                                  //     if (d) {}
+                                  //   });
+                                  // },
+                                  label: Text(
+                                    e.value,
+                                    style: TextStyle(
+                                        color: _isSelected
+                                            ? chipLightBlueColor
+                                            : chipDarkBlueColor,
+                                        fontSize: h * 0.015),
+                                  )),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Divider(),
+                Container(
+                  height: h * 0.2,
+                  width: w,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.vertical,
+                    child: Wrap(
+                      children: [
+                        ...maintags.map((e) {
+                          double _sidePadding =
+                              kIsWeb ? webSideW * 0.015 : w * 0.015;
+                          return Container(
+                              margin: EdgeInsets.fromLTRB(_sidePadding,
+                                  _sidePadding, _sidePadding, _sidePadding),
+                              child: Chip(
+                                backgroundColor:
+                                    chipDarkBlueColor.withAlpha(240),
+                                label: Text(
+                                  e,
+                                  style: TextStyle(
+                                      color: chipLightBlueColor,
+                                      fontSize: h * 0.015),
+                                ),
+                                onDeleted: () {},
+                                deleteIcon: CircleAvatar(
+                                  backgroundColor: chipLightBlueColor,
+                                  child: Center(
+                                    child: IconButton(
+                                        padding: EdgeInsets.zero,
+                                        onPressed: () {
+                                          dialogState(() {
+                                            maintags.remove(e);
+                                          });
+                                        },
+                                        iconSize: 18,
+                                        icon: Icon(
+                                          Icons.close,
+                                          color: Colors.black,
+                                        )),
+                                  ),
+                                ),
+                              ));
+                        })
+                      ],
+                    ),
+                  ),
+                )
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  _mainTagsChipsRow() {
+    return Container(
+      // margin: EdgeInsets.all(h*0.01),
+      width: double.infinity,
+// color: Colors.red,
+      height: h * 0.06,
+      child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: maintags.length,
+          itemBuilder: (c, i) {
+            return Padding(
+              padding: EdgeInsets.all(h * 0.01),
+              child: Chip(
+                label: Text(maintags[i]),
+                backgroundColor: chipLightBlueColor,
+                labelStyle: TextStyle(fontSize: 13),
+              ),
+            );
+          }),
+    );
+  }
+
+  void showBulletEditdialog(int i) {
+    TextEditingController _tempBulletCont =
+        TextEditingController(text: bullets[i]);
+    showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: TextField(
+                controller: _tempBulletCont,
+                maxLines: 10,
+                decoration: InputDecoration(
+                    focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(
+                            width: 1,
+                            color: myColors.textfieldFocusborder ??
+                                themeData.primaryColor),
+                        borderRadius: BorderRadius.circular(h * 0.02)),
+                    enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(
+                            width: 1,
+                            color: myColors.textfieldborder ??
+                                themeData.primaryColor),
+                        borderRadius: BorderRadius.circular(h * 0.02)),
+                    suffixIcon: IconButton(
+                      iconSize: h * 0.035,
+                      onPressed: () {
+                        _tempBulletCont.clear();
+                        updateState();
+                      },
+                      icon: FittedBox(
+                        child: closeIcon(),
+                      ),
+                    )),
+              ),
+              actions: [
+                TextButton(
+                  child: Text(
+                    'Update',
+                    style: TextStyle(color: Colors.green),
+                  ),
+                  onPressed: () async {
+                    bullets[i] = _tempBulletCont.text;
+                    updateState();
+                    Navigator.pop(context);
+                  },
+                ),
+                TextButton(
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.black),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(context);
+                  },
+                )
+              ],
+            ));
   }
 }

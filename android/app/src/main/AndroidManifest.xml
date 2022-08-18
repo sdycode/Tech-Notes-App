@@ -1,8 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.sdyapps22.flutternotes">
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />: , 
+
+	
 	<application android:label="Notes" android:name="${applicationName}" android:icon="@mipmap/ic_launcher">
 		<activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
 			<!--
@@ -25,3 +25,10 @@
 		<meta-data android:name="flutterEmbedding" android:value="2" />
 	</application>
 </manifest>
+<!--
+<meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+<meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+<meta-data
+android:name="com.google.firebase.messaging.default_notification_channel_id"
+android:value="Flutter Notes"/>
+-->

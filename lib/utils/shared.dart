@@ -1,3 +1,4 @@
+import 'package:flutter/src/material/app.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class Shared {
@@ -14,4 +15,24 @@ class Shared {
   static bool getAdminStat() {
     return pref.getBool('admin') ?? false;
   }
+
+  static bool isDarkTheme() {
+    return pref.getBool('theme') ?? false;
+  }
+
+  static void setAppThememode(ThemeMode currentTheme) {
+    pref.setBool('theme', currentTheme == ThemeMode.dark ? true : false);
+  }
+
+  static ThemeMode getCurrthemefromSharedPref() {
+    return isDarkTheme() ? ThemeMode.dark : ThemeMode.light;
+  }
+
+  static void setLoginStatus(bool bool) {
+          pref.setBool('isLogin', bool);
+
+  }
+  static bool isLogin(){
+    return  pref.getBool('isLogin') ?? false;
+  } 
 }

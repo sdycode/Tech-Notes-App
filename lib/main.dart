@@ -1,14 +1,20 @@
+import 'dart:developer';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+// import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 // import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:stick_box/screens/cloudstorescreen.dart';
+import 'package:stick_box/screens/main_screen.dart';
 import 'package:stick_box/screens/login_screen.dart';
 
+import 'package:stick_box/services/local_notification_service.dart';
+
 import 'package:stick_box/utils/provder.dart';
+import 'package:stick_box/utils/snackbar.dart';
 import 'package:stick_box/utils/theme.dart';
 
 import 'firebase_options.dart';
@@ -16,41 +22,49 @@ import 'utils/shared.dart';
 // import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 // Future<void> backgroundHandler(RemoteMessage remoteMessage) async {
-//   print(remoteMessage.data);
-//   print(remoteMessage.messageId);
+//   print('messager backgroundHandler emoteMessageId ${remoteMessage.data}');
+//   print('message backgroundHandler messageId  ${remoteMessage.messageId}');
 // }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
-  );
-  // await FirebaseAuth.instance.authStateChanges(
+  ).catchError((d) {
+    log(
+      'catcherr $d',
+    );
+  });
+  if (!kIsWeb) {
+    // LocalNotificationService.initialize();
+    await FirebaseAuth.instance.authStateChanges();
 
-  // );
+    // } catch (e) {}
+    // await FirebaseMessaging.instance.setAutoInitEnabled(true);
+    // final fcmToken = await FirebaseMessaging.instance.getToken().then((value) {
+    //   print('ff ${value}');
+    //   return value;
+    // });
+    // FirebaseMessaging messaging = FirebaseMessaging.instance;
 
-  // } catch (e) {}
-  // final fcmToken = await FirebaseMessaging.instance.getToken().then((value) {
-  //   print('ff ${value}');
-  //   return value;
-  // });
-  // FirebaseMessaging messaging = FirebaseMessaging.instance;
-
-  // NotificationSettings settings = await messaging
-  //     .requestPermission(
-  //   alert: true,
-  //   announcement: false,
-  //   badge: true,
-  //   carPlay: false,
-  //   criticalAlert: false,
-  //   provisional: false,
-  //   sound: true,
-  // )
-  //     .then((value) {
-  //           print('ff sett ${value}');
-  //   return value;
-  // });
-  // FirebaseMessaging.onBackgroundMessage((message) => backgroundHandler(message));
+    // NotificationSettings settings = await messaging
+    //     .requestPermission(
+    //   alert: true,
+    //   announcement: false,
+    //   badge: true,
+    //   carPlay: false,
+    //   criticalAlert: false,
+    //   provisional: false,
+    //   sound: true,
+    // )
+    //     .then((value) {
+    //   print('ff sett ${value.authorizationStatus}');
+    //   return value;
+    // });
+    // print('settting ${settings.toString()}');
+    // FirebaseMessaging.onBackgroundMessage(
+    //     (message) => backgroundHandler(message));
+  }
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent, // status bar color
@@ -99,8 +113,12 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     print('theme called');
-    print('firebsss in main ${FirebaseAuth.instance}');
+    // print('firebsss in main ${FirebaseAuth.instance}');
     print('firebsss in main cc ${FirebaseAuth.instance.currentUser}');
+    if (FirebaseAuth.instance.currentUser == null) {
+      Shared.setLoginStatus(false);
+    }
+    // Shared.setAppThememode(customTheme.currentTheme);
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
@@ -109,33 +127,29 @@ class _MyAppState extends State<MyApp> {
       ],
       child: MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'Flutter Notes',
+          title: 'Notes',
           theme: CustomTheme.lightTheme,
           darkTheme: CustomTheme.darkTheme,
-          themeMode: customTheme.currentTheme,
+          themeMode: Shared.getCurrthemefromSharedPref(),
           //  ThemeData(
           //   primarySwatch: Colors.blue,
 
           // ),
-          home:
-              //  RemoteScreen()
-              // CloudStoreScreen(),
-              kIsWeb
-                  ? CloudStoreScreen()
-                  : StreamBuilder<User?>(
-                      stream: FirebaseAuth.instance.authStateChanges(),
-                      builder: (BuildContext context,
-                          AsyncSnapshot<dynamic> snapshot) {
-                        if (snapshot.hasData) {
-                          User _user = snapshot.data as User;
-                          print(
-                              'user  ${_user.providerData[0].email} //  ${_user.displayName} and ${_user.email}');
-                          return CloudStoreScreen();
-                        } else {
-                          return LoginScreen();
-                        }
-                      },
-                    )),
+          home: kIsWeb
+              ? MainScreen()
+              : StreamBuilder<User?>(
+                  stream: FirebaseAuth.instance.authStateChanges(),
+                  builder:
+                      (BuildContext context, AsyncSnapshot<dynamic> snapshot) {
+                    if (snapshot.hasData) {
+                      User _user = snapshot.data as User;
+                      log('_user $_user');
+                      return MainScreen();
+                    } else {
+                      return LoginScreen();
+                    }
+                  },
+                )),
     );
   }
 }

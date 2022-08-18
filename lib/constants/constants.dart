@@ -11,10 +11,11 @@ class C {
   static String linkedinlink =
       'https://www.linkedin.com/in/shubham-yeole-344307109/';
   static String youtubevideolink =
-      "https://www.youtube.com/watch?v=-goel9qSKvE";
-static String gitlink ="https://github.com/sdycode/Stick-Box-Game-Flutter";
+      "https://www.youtube.com/watch?v=SjwGtnPkjEw";
+static String gitlink ="https://github.com/sdycode/Notes-App";
 
   static Color titleColor = Colors.pink;
+  
   static String noTitlenoNotenoTag =
       'Please enter Title, Note & select Technology';
   static String noTitlenoNote = 'Please enter Title & Note';
